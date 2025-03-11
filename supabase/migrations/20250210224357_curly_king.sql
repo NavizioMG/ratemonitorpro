@@ -1,0 +1,21 @@
+-- Drop all deals-related tables
+DROP TABLE IF EXISTS deal_documents CASCADE;
+DROP TABLE IF EXISTS deal_contacts CASCADE;
+DROP TABLE IF EXISTS deal_custom_fields CASCADE;
+DROP TABLE IF EXISTS pipeline_templates CASCADE;
+DROP TABLE IF EXISTS deal_tags_junction CASCADE;
+DROP TABLE IF EXISTS deal_tags CASCADE;
+DROP TABLE IF EXISTS deal_checklists CASCADE;
+DROP TABLE IF EXISTS deal_milestones CASCADE;
+DROP TABLE IF EXISTS deal_requirements CASCADE;
+DROP TABLE IF EXISTS emails CASCADE;
+DROP TABLE IF EXISTS email_templates CASCADE;
+DROP TABLE IF EXISTS deal_emails CASCADE;
+DROP TABLE IF EXISTS activities CASCADE;
+DROP TABLE IF EXISTS tasks CASCADE;
+DROP TABLE IF EXISTS notes CASCADE;
+DROP TABLE IF EXISTS deals CASCADE;
+DROP TABLE IF EXISTS pipeline_stages CASCADE;
+
+-- Force schema cache refresh
+NOTIFY pgrst, 'reload schema';

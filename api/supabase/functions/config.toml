@@ -1,0 +1,19 @@
+[functions]
+[functions.fetch-rates]
+verify_jwt = true
+[functions.stripe-webhook]
+verify_jwt = false
+[functions.create-checkout-session]
+verify_jwt = true
+[functions.get-subscription]
+verify_jwt = true
+[functions.cancel-subscription]
+verify_jwt = true
+[functions.get-billing-history]
+verify_jwt = true
+[functions.sync-client-data]
+verify_jwt = true
+[functions.send-notifications]
+verify_jwt = true
+[functions.generate-analytics]
+verify_jwt = true
