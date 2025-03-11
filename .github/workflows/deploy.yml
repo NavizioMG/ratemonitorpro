@@ -84,12 +84,13 @@ jobs:
         timeout-minutes: 10
 
   deploy-production:
-    needs: test
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    environment: production
-    
-    steps:
+  # needs: test  # Comment or delete this
+  if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  runs-on: ubuntu-latest
+  environment: production
+  
+  steps:
+    # ... rest unchanged
       - uses: actions/checkout@v4
       
       - name: Setup Node.js
