@@ -5,7 +5,8 @@
   "private": true,
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "test": "echo 'No API tests yet' && exit 0"
   },
   "dependencies": {
     "cors": "^2.8.5",
