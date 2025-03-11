@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "echo 'No API tests yet' && exit 0"
+    "test": "echo 'No API tests yet' && exit 0",
+    "deploy:production": "supabase functions deploy --project-ref lcfrafedxrevtrhymmhu"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -14,5 +15,8 @@
     "express": "^4.18.2",
     "stripe": "^14.14.0",
     "morgan": "^1.10.0"
+  }
+  "devDependencies": {
+    "supabase": "^1.0.0"  // Ensure this is here!
   }
 }
