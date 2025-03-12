@@ -4,8 +4,10 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
+
 };
 
+// Force redeploy - March 12, 2025
 serve(async (req) => {
   console.log('Request received:', req.method);
 
