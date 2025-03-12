@@ -5,16 +5,7 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  NODE_ENV = "development"  # Ensures devDependencies install
-
-[context.production]
-  environment = { NODE_ENV = "production" }
-
-[context.deploy-preview]
-  environment = { NODE_ENV = "staging" }
-
-[context.branch-deploy]
-  environment = { NODE_ENV = "staging" }
+  NODE_ENV = "development"  # Force devDependencies install
 
 [[redirects]]
   from = "/*"
