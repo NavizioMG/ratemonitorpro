@@ -125,57 +125,39 @@ export function Settings() {
       if (fetchError) throw fetchError;
 
       if (profile?.ghl_location_id) {
-        console.log('Updating GHL sub-account:', profile.ghl_location_id);
-        await axios.put(
-          `https://rest.gohighlevel.com/v1/locations/${profile.ghl_location_id}`,
-          {
-            name: formData.companyName,
-            businessName: formData.companyName,
+        console.log('Updating GHL sub-account via Netlify function:', profile.ghl_location_id);
+      
+        const response = await fetch('/.netlify/functions/update-subaccount', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ghlLocationId: profile.ghl_location_id,
+            companyName: formData.companyName,
             email: session.user.email,
             phone: formData.phone,
-            firstName: formData.fullName.split(' ')[0] || formData.fullName,
-            lastName: formData.fullName.split(' ')[1] || '',
-            address: formData.address || '123 Main St',
-            city: formData.city || 'Denver',
-            state: formData.state || 'CO',
-            postalCode: formData.postalCode || '80202',
-            country: formData.country || 'US',
+            fullName: formData.fullName,
+            address: formData.address,
+            city: formData.city,
+            state: formData.state,
+            postalCode: formData.postalCode,
+            country: formData.country,
             timezone: formData.timezone,
-            website: formData.website || 'https://example.com',
-            business: {
-              name: formData.companyName,
-              email: session.user.email,
-              address: formData.address || '123 Main St',
-              city: formData.city || 'Denver',
-              state: formData.state || 'CO',
-              postalCode: formData.postalCode || '80202',
-              country: formData.country || 'US',
-              timezone: formData.timezone
-            }
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${import.meta.env.VITE_GHL_API_KEY}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        ).catch(err => {
-          console.error('GHL update error:', err.response?.data || err.message);
-          throw err;
+            website: formData.website,
+          }),
         });
+      
+        const result = await response.json();
+      
+        if (!response.ok) {
+          console.error('GHL update error:', result);
+          throw new Error('Failed to update GHL sub-account');
+        } else {
+          console.log('GHL sub-account update successful:', result);
+        }
       } else {
         console.warn('No GHL location ID—skipping update');
       }
-
-      debug.logInfo(Category.API, 'Profile and preferences updated', { userId: session.user.id });
-    } catch (err) {
-      console.error('Update error:', err.message);
-      debug.logError(Category.API, 'Error updating profile', {}, err);
-      setError('Failed to update profile. Check console for details.');
-    } finally {
-      setLoading(false);
-    }
-  };
+      
 
   const handleDeleteAccount = async () => {
     setLoading(true);

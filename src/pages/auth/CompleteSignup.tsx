@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { debug, Category } from '../../lib/debug';
 import { supabase } from '../../lib/supabase';
-import { createGHLSubAccount } from '../../services/gohighlevel';
 
 const COMPONENT_ID = 'CompleteSignup';
 
@@ -52,22 +51,24 @@ export function CompleteSignup() {
           throw new Error(`Invalid email format: ${fixedEmail}`);
         }
 
-        // Step 1: Create GHL sub-account and contact
-        const { locationId, rmpContactId } = await createGHLSubAccount(
-          '', // Temp userId
-          companyName,
-          fixedEmail,
-          fullName,
-          phone,
-          undefined, // address
-          undefined, // city
-          undefined, // state
-          undefined, // postalCode
-          undefined, // country
-          undefined, // website
-          timezone
-        );
-        console.log('GHL response:', { locationId, rmpContactId });
+        // Step 1: Securely create GHL sub-account & contact via Netlify function
+const ghlResponse = await fetch('/.netlify/functions/add-client', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    fullName,
+    email: fixedEmail,
+    phone,
+    companyName,
+    timezone,
+  }),
+});
+
+const { locationId, rmpContactId, error: ghlError } = await ghlResponse.json();
+
+if (!ghlResponse.ok || ghlError) {
+  throw new Error('Failed to create GHL contact.');
+}
 
         // Step 2: Handle Supabase auth
         let userId;

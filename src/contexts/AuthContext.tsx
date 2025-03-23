@@ -2,7 +2,6 @@ import { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Profile, Session } from '../types/database';
 import { debug, Category } from '../lib/debug';
-import { createGHLSubAccount } from '../services/gohighlevel';
 
 const COMPONENT_ID = 'AuthContext';
 const AUTH_TIMEOUT = 10000; // 10 seconds
@@ -24,20 +23,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const initTimeoutRef = useRef<NodeJS.Timeout>();
   const initAttemptRef = useRef(0);
 
-  const ensureProfile = async (userId: string, userData?: { fullName?: string; companyName?: string; phone?: string }) => {
+  const ensureProfile = async (
+    userId: string,
+    userData?: { fullName?: string; companyName?: string; phone?: string }
+  ) => {
     try {
       // Wait a short time to ensure auth user is fully created
       await new Promise(resolve => setTimeout(resolve, 1000));
-
+  
       const { data: existingProfile } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
         .maybeSingle();
-
+  
       if (!existingProfile && userData) {
         debug.logInfo(Category.AUTH, 'Creating new profile', { userId }, COMPONENT_ID);
-        
+  
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .insert([{
@@ -48,34 +50,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }])
           .select()
           .single();
-
+  
         if (profileError) throw profileError;
-
-        // Create GHL sub-account
+  
+        // ✅ SAFER: Use email from userData, fallback to session
+        const email = userData.email || session?.user?.email;
+  
+        // Call secure Netlify backend function to create GHL contact
         try {
-          debug.logInfo(Category.AUTH, 'Creating GHL sub-account', { 
-            userId,
-            companyName: userData.companyName
+          debug.logInfo(Category.AUTH, 'Creating GHL sub-account via Netlify function', {
+            fullName: userData.fullName,
+            email,
+            phone: userData.phone,
+            companyName: userData.companyName,
           }, COMPONENT_ID);
-
-          const ghlData = await createGHLSubAccount(
-            userId,
-            userData.companyName || 'New Business'
-          );
-
-          debug.logInfo(Category.AUTH, 'GHL sub-account created successfully', { 
-            ghlData 
-          }, COMPONENT_ID);
-        } catch (ghlError) {
-          debug.logError(Category.AUTH, 'Failed to create GHL sub-account', {
-            error: ghlError.message
-          }, ghlError, COMPONENT_ID);
-          // Don't throw error - allow signup to succeed even if GHL setup fails
+  
+          const response = await fetch('/.netlify/functions/add-client', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              fullName: userData.fullName,
+              email,
+              phone: userData.phone,
+              companyName: userData.companyName,
+            }),
+          });
+  
+          const result = await response.json();
+  
+          if (!response.ok) {
+            debug.logError(Category.API, 'GHL backend function failed', { result }, null, COMPONENT_ID);
+          } else {
+            debug.logInfo(Category.API, 'GHL contact created successfully via backend', { result }, COMPONENT_ID);
+          }
+        } catch (error) {
+          debug.logError(Category.AUTH, 'Failed to call backend GHL function', { error }, error, COMPONENT_ID);
         }
-
+  
         return profile;
       }
-
+  
       return existingProfile;
     } catch (error) {
       debug.logError(Category.AUTH, 'Error ensuring profile exists', { userId }, error, COMPONENT_ID);
