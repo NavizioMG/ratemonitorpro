@@ -38,8 +38,8 @@ const environments: Record<string, Environment> = {
   },
   staging: {
     name: import.meta.env.VITE_APP_NAME || 'Mortgage Rate Monitor (Staging)',
-    apiUrl: import.meta.env.VITE_SUPABASE_URL,
-    appUrl: import.meta.env.VITE_APP_URL,
+    apiUrl: import.meta.env.VITE_SUPABASE_URL, // ❌ no fallback
+    appUrl: import.meta.env.VITE_APP_URL,       // ❌ no fallback
     debug: true,
     analytics: true,
     features: {
@@ -56,8 +56,8 @@ const environments: Record<string, Environment> = {
   },
   production: {
     name: import.meta.env.VITE_APP_NAME || 'Mortgage Rate Monitor',
-    apiUrl: import.meta.env.VITE_SUPABASE_URL,
-    appUrl: import.meta.env.VITE_APP_URL,
+    apiUrl: import.meta.env.VITE_SUPABASE_URL, // ❌ no fallback
+    appUrl: import.meta.env.VITE_APP_URL,       // ❌ no fallback
     debug: false,
     analytics: true,
     features: {
@@ -73,5 +73,6 @@ const environments: Record<string, Environment> = {
     },
   },
 };
+
 
 export const currentEnvironment = environments[import.meta.env.VITE_APP_ENV || 'development'];
