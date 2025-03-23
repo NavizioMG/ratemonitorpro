@@ -71,7 +71,7 @@ export function GettingStarted() {
           </div>
           <p>
             The application will be available at{' '}
-            <code>http://localhost:5173</code>
+            <code>https://ratemonitorpro.com</code>
           </p>
 
           <h2>Next Steps</h2>

@@ -20,8 +20,8 @@ export interface Environment {
 const environments: Record<string, Environment> = {
   development: {
     name: import.meta.env.VITE_APP_NAME || 'Mortgage Rate Monitor (Dev)',
-    apiUrl: import.meta.env.VITE_SUPABASE_URL || 'http://localhost:54321',
-    appUrl: import.meta.env.VITE_APP_URL || 'http://localhost:5173',
+    apiUrl: import.meta.env.VITE_SUPABASE_URL || 'https://lcfrafedxrevtrhymmhu.supabase.co',
+    appUrl: import.meta.env.VITE_APP_URL || 'https://ratemonitorpro.com',
     debug: true,
     analytics: false,
     features: {

@@ -63,6 +63,7 @@ export function SignUpForm() {
       setLoading(false);
     }
   };
+  console.log('APP URL:', getAppUrl());
 
   return (
     <div className="w-full max-w-md">

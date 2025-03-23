@@ -24,9 +24,7 @@ export const STANDARD_PLAN = {
 
 // ✅ Helper to get base URL dynamically based on environment
 function getAppUrl(): string {
-  return import.meta.env.DEV
-    ? 'http://localhost:5173'
-    : import.meta.env.VITE_APP_URL || 'https://ratemonitorpro.com'; // fallback just in case
+  return import.meta.env.VITE_APP_URL || 'https://ratemonitorpro.com';
 }
 
 export async function createCheckoutSession(formData: {
