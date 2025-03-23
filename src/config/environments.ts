@@ -2,6 +2,7 @@ export interface Environment {
   name: string;
   apiUrl: string;
   appUrl: string;
+  functionBaseUrl: string; // ✅ for Supabase Edge Functions
   debug: boolean;
   analytics: boolean;
   features: {
@@ -22,6 +23,7 @@ const environments: Record<string, Environment> = {
     name: import.meta.env.VITE_APP_NAME || 'Mortgage Rate Monitor (Dev)',
     apiUrl: import.meta.env.VITE_SUPABASE_URL || 'https://lcfrafedxrevtrhymmhu.supabase.co',
     appUrl: import.meta.env.VITE_APP_URL || 'https://ratemonitorpro.com',
+    functionBaseUrl: import.meta.env.VITE_SUPABASE_EDGE_URL || 'https://lcfrafedxrevtrhymmhu.supabase.co/functions/v1',
     debug: true,
     analytics: false,
     features: {
@@ -38,8 +40,9 @@ const environments: Record<string, Environment> = {
   },
   staging: {
     name: import.meta.env.VITE_APP_NAME || 'Mortgage Rate Monitor (Staging)',
-    apiUrl: import.meta.env.VITE_SUPABASE_URL, // ❌ no fallback
-    appUrl: import.meta.env.VITE_APP_URL,       // ❌ no fallback
+    apiUrl: import.meta.env.VITE_SUPABASE_URL,
+    appUrl: import.meta.env.VITE_APP_URL,
+    functionBaseUrl: import.meta.env.VITE_SUPABASE_EDGE_URL,
     debug: true,
     analytics: true,
     features: {
@@ -56,8 +59,9 @@ const environments: Record<string, Environment> = {
   },
   production: {
     name: import.meta.env.VITE_APP_NAME || 'Mortgage Rate Monitor',
-    apiUrl: import.meta.env.VITE_SUPABASE_URL, // ❌ no fallback
-    appUrl: import.meta.env.VITE_APP_URL,       // ❌ no fallback
+    apiUrl: import.meta.env.VITE_SUPABASE_URL,
+    appUrl: import.meta.env.VITE_APP_URL,
+    functionBaseUrl: import.meta.env.VITE_SUPABASE_EDGE_URL,
     debug: false,
     analytics: true,
     features: {
@@ -74,5 +78,5 @@ const environments: Record<string, Environment> = {
   },
 };
 
-
+// ✅ Exports the environment based on VITE_APP_ENV (defaulting to dev)
 export const currentEnvironment = environments[import.meta.env.VITE_APP_ENV || 'development'];

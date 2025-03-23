@@ -1,5 +1,3 @@
-// /supabase/functions/add-client/index.ts
-
 import { serve } from "https://deno.land/std@0.131.0/http/server.ts";
 
 // Load env vars securely

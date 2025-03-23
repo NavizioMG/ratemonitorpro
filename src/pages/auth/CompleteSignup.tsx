@@ -3,6 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { debug, Category } from '../../lib/debug';
 import { supabase } from '../../lib/supabase';
+import { getSupabaseEdgeUrl } from '../../lib/environment';
+
 
 const COMPONENT_ID = 'CompleteSignup';
 
