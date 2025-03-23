@@ -4,6 +4,7 @@
   functions = "netlify/functions"
 
 [build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "VITE_SUPABASE_ANON_KEY,VITE_SUPABASE_URL,VITE_STRIPE_PUBLISHABLE_KEY"
   NODE_VERSION = "20"
   NODE_ENV = "development"  # Force devDependencies install
 
