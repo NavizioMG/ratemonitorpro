@@ -127,11 +127,6 @@ export function CompleteSignup() {
 
   // ⬇️ Your loading and error UI stays unchanged...
 
-  return (
-    // ✅ success screen JSX (same as before)
-  );
-}
-
 
   if (loading) {
     return (
