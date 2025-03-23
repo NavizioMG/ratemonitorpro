@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { UserPlus, AlertCircle } from 'lucide-react';
 import { debug, Category } from '../../lib/debug';
 import { createCheckoutSession } from '../../services/stripe';
+import { getAppUrl } from '../../services/stripe'; // 👈 only if it's not already imported
+
+console.log('APP URL:', getAppUrl()); // ✅ this is the line that will log the value
 
 export function SignUpForm() {
   const [formData, setFormData] = useState({
@@ -63,7 +66,6 @@ export function SignUpForm() {
       setLoading(false);
     }
   };
-  console.log('APP URL:', getAppUrl());
 
   return (
     <div className="w-full max-w-md">

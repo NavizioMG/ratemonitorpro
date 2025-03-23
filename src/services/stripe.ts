@@ -24,8 +24,11 @@ export const STANDARD_PLAN = {
 
 // ✅ Helper to get base URL dynamically based on environment
 function getAppUrl(): string {
-  return import.meta.env.VITE_APP_URL || 'https://ratemonitorpro.com';
+  const url = import.meta.env.VITE_APP_URL || 'https://ratemonitorpro.com';
+  console.log('[Debug] Using APP URL:', url);
+  return url;
 }
+
 
 export async function createCheckoutSession(formData: {
   email: string;
