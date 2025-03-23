@@ -38,8 +38,9 @@ serve(async (req) => {
       mode: "subscription",
       customer_email: email,
       line_items: [{ price: "price_1QuFSOEsyVlivUjUI616psS8", quantity: 1 }],
-      success_url: "https://ratemonitorpro.com/auth/complete-signup?success=true",
-      cancel_url: "https://ratemonitorpro.com/auth?canceled=true",
+      success_url: `${Deno.env.get("APP_URL")}/auth/complete-signup?success=true`,
+      cancel_url: `${Deno.env.get("APP_URL")}/auth?canceled=true`,
+
     });
 
     await createGHLSubAccount(email); // Create sub-account after payment
