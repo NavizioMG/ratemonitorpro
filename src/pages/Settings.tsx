@@ -158,8 +158,19 @@ export function Settings() {
         console.warn('No GHL location ID—skipping update');
       }
       
-
-  const handleDeleteAccount = async () => {
+      debug.logInfo(Category.API, 'Profile and preferences updated', { userId: session.user.id });
+      } catch (err) {
+        console.error('Update error:', err.message);
+        debug.logError(Category.API, 'Error updating profile', {}, err);
+        setError('Failed to update profile. Check console for details.');
+      } finally {
+        setLoading(false);
+      }
+    };
+      
+      // ✅ Now you're ready to declare the next function:
+      const handleDeleteAccount = async () => {
+      
     setLoading(true);
     setError(null);
 
