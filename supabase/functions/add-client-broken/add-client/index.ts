@@ -1,12 +1,9 @@
-// supabase/functions/add-client/index.ts
 import { serve } from "https://deno.land/std@0.131.0/http/server.ts";
 
-// ✅ Load environment variables securely
 const GHL_API_KEY = Deno.env.get("VITE_GHL_API_KEY") || "";
 const GHL_LOCATION_ID = Deno.env.get("VITE_RMP_LOCATION_ID") || "";
 const GHL_COMPANY_ID = Deno.env.get("VITE_GHL_COMPANY_ID") || "";
 
-// ✅ CORS headers (open for now, you can restrict later)
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -14,12 +11,10 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // ✅ Handle OPTIONS preflight request
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
+    return new Response("OK", { headers: corsHeaders });
   }
 
-  // ✅ Only allow POST
   if (req.method !== "POST") {
     return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
       status: 405,
@@ -31,10 +26,10 @@ serve(async (req) => {
     const { fullName, email, phone, companyName, timezone } = await req.json();
 
     if (!fullName || !email) {
-      return new Response(
-        JSON.stringify({ error: "Missing required fields" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Missing required fields" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     const ghlRes = await fetch("https://rest.gohighlevel.com/v1/contacts/", {
@@ -51,28 +46,25 @@ serve(async (req) => {
         companyName,
         source: "Rate Monitor Pro",
         tags: [GHL_COMPANY_ID, "User"],
-        customField: {
-          timezone,
-        },
       }),
     });
 
     const data = await ghlRes.json();
 
     if (!ghlRes.ok) {
-      console.error("[GHL ERROR]:", data);
-      return new Response(
-        JSON.stringify({ error: "GHL API failed", details: data }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      console.error("[GHL API ERROR]:", data);
+      return new Response(JSON.stringify({ error: "GHL API failed", details: data }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    return new Response(JSON.stringify({ message: "Client added", ...data }), {
+    return new Response(JSON.stringify({ message: "Client added", locationId: GHL_LOCATION_ID, rmpContactId: data.id }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("Server Error:", err);
+    console.error("Add Client Error:", err);
     return new Response(JSON.stringify({ error: "Internal Server Error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
