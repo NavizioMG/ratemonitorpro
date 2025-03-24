@@ -1,6 +1,10 @@
 // supabase/functions/add-client/index.ts
 import { serve } from "https://deno.land/std@0.131.0/http/server.ts";
 
+console.log("GHL_API_KEY:", GHL_API_KEY);
+console.log("GHL_LOCATION_ID:", GHL_LOCATION_ID);
+console.log("GHL_COMPANY_ID:", GHL_COMPANY_ID);
+
 // ✅ Load environment variables securely
 const GHL_API_KEY = Deno.env.get("VITE_GHL_API_KEY") || "";
 const GHL_LOCATION_ID = Deno.env.get("VITE_RMP_LOCATION_ID") || "";
