@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { debug, Category } from '../../lib/debug';
 import { supabase } from '../../lib/supabase';
-import { currentEnvironment } from '../../config/environments'; // ✅ import environment config
+import { createGHLSubAccount } from '../../services/gohighlevel';
 
 const COMPONENT_ID = 'CompleteSignup';
 
@@ -17,7 +17,6 @@ export function CompleteSignup() {
 
   useEffect(() => {
     if (completed || hasRun.current) return;
-
     hasRun.current = true;
 
     const completeSignup = async () => {
@@ -44,18 +43,22 @@ export function CompleteSignup() {
           throw new Error(`Invalid email format: ${fixedEmail}`);
         }
 
-        // ✅ Use dynamic function URL from env
-        const functionBase = currentEnvironment.functionBaseUrl;
-        const ghlResponse = await fetch(`${functionBase}/add-client`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fullName, email: fixedEmail, phone, companyName, timezone }),
-        });
+        // Create GHL sub-account and RMP contact
+        const { locationId, rmpContactId } = await createGHLSubAccount(
+          '',
+          companyName,
+          fixedEmail,
+          fullName,
+          phone,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          timezone
+        );
 
-        const { locationId, rmpContactId, error: ghlError } = await ghlResponse.json();
-        if (!ghlResponse.ok || ghlError) throw new Error('Failed to create GHL contact.');
-
-        // ✅ Supabase auth + profile setup logic remains the same...
         let userId;
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email: fixedEmail, password });
 
@@ -124,9 +127,6 @@ export function CompleteSignup() {
 
     completeSignup();
   }, [searchParams, navigate, completed]);
-
-  // ⬇️ Your loading and error UI stays unchanged...
-
 
   if (loading) {
     return (
