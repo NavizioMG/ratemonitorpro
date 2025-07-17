@@ -37,9 +37,10 @@ export function Settings() {
     const fetchData = async () => {
       if (!session?.user?.id) return;
 
+      // Fixed: Use snake_case column names to match database
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('full_name, company_name, phone, timezone, address, city, state, postalCode, country, website, ghl_location_id')
+        .select('full_name, company_name, phone, timezone, address, city, state, postal_code, country, website, ghl_location_id')
         .eq('id', session.user.id)
         .single();
 
@@ -72,7 +73,7 @@ export function Settings() {
         address: profileData?.address || '',
         city: profileData?.city || '',
         state: profileData?.state || '',
-        postalCode: profileData?.postalCode || '',
+        postalCode: profileData?.postal_code || '', // Fixed: Use postal_code from database
         country: profileData?.country || '',
         website: profileData?.website || ''
       });
@@ -89,6 +90,7 @@ export function Settings() {
       if (!session?.user?.id) throw new Error('User not authenticated');
 
       console.log('Updating Supabase profile:', formData);
+      // Fixed: Use snake_case column names in update
       const { error: profileError } = await supabase
         .from('profiles')
         .update({
@@ -99,7 +101,7 @@ export function Settings() {
           address: formData.address,
           city: formData.city,
           state: formData.state,
-          postalCode: formData.postalCode,
+          postal_code: formData.postalCode, // Fixed: Use postal_code for database
           country: formData.country,
           website: formData.website
         })
