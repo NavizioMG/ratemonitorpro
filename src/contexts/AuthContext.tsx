@@ -6,6 +6,9 @@ import { debug, Category } from '../lib/debug';
 const COMPONENT_ID = 'AuthContext';
 const AUTH_TIMEOUT = 10000; // 10 seconds
 
+// Generate unique tab ID to prevent state conflicts
+const TAB_ID = `tab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
 interface AuthContextType {
   session: Session | null;
   loading: boolean;
@@ -21,6 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  const [tabId] = useState(TAB_ID);
   const mountedRef = useRef(true);
   const initTimeoutRef = useRef<NodeJS.Timeout>();
   const initAttemptRef = useRef(0);
@@ -41,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
   
       if (!existingProfile && userData) {
-        debug.logInfo(Category.AUTH, 'Creating new profile', { userId }, COMPONENT_ID);
+        debug.logInfo(Category.AUTH, 'Creating new profile', { userId, tabId }, COMPONENT_ID);
   
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
@@ -66,6 +70,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email,
             phone: userData.phone,
             companyName: userData.companyName,
+            tabId
           }, COMPONENT_ID);
   
           const response = await fetch('/.netlify/functions/add-client', {
@@ -82,12 +87,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           const result = await response.json();
   
           if (!response.ok) {
-            debug.logError(Category.API, 'GHL backend function failed', { result }, null, COMPONENT_ID);
+            debug.logError(Category.API, 'GHL backend function failed', { result, tabId }, null, COMPONENT_ID);
           } else {
-            debug.logInfo(Category.API, 'GHL contact created successfully via backend', { result }, COMPONENT_ID);
+            debug.logInfo(Category.API, 'GHL contact created successfully via backend', { result, tabId }, COMPONENT_ID);
           }
         } catch (error) {
-          debug.logError(Category.AUTH, 'Failed to call backend GHL function', { error }, error, COMPONENT_ID);
+          debug.logError(Category.AUTH, 'Failed to call backend GHL function', { error, tabId }, error, COMPONENT_ID);
         }
   
         return profile;
@@ -95,7 +100,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   
       return existingProfile;
     } catch (error) {
-      debug.logError(Category.AUTH, 'Error ensuring profile exists', { userId }, error, COMPONENT_ID);
+      debug.logError(Category.AUTH, 'Error ensuring profile exists', { userId, tabId }, error, COMPONENT_ID);
       throw error;
     }
   };
@@ -115,62 +120,83 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     debug.logInfo(Category.AUTH, 'Setting up token refresh', {
       expiresAt: new Date(expiresAt).toISOString(),
-      refreshIn: Math.round(refreshTime / 1000) + 's'
+      refreshIn: Math.round(refreshTime / 1000) + 's',
+      tabId
     }, COMPONENT_ID);
 
     refreshIntervalRef.current = setTimeout(async () => {
       try {
-        debug.logInfo(Category.AUTH, 'Refreshing session token', {}, COMPONENT_ID);
+        debug.logInfo(Category.AUTH, 'Refreshing session token', { tabId }, COMPONENT_ID);
         const { data: { session: refreshedSession }, error } = await supabase.auth.refreshSession();
         
         if (error) {
-          debug.logError(Category.AUTH, 'Token refresh failed', {}, error, COMPONENT_ID);
+          debug.logError(Category.AUTH, 'Token refresh failed', { tabId }, error, COMPONENT_ID);
           // Don't sign out immediately, let the auth state change handler deal with it
           return;
         }
 
         if (refreshedSession) {
-          debug.logInfo(Category.AUTH, 'Token refreshed successfully', {}, COMPONENT_ID);
+          debug.logInfo(Category.AUTH, 'Token refreshed successfully', { tabId }, COMPONENT_ID);
           setupTokenRefresh(refreshedSession); // Setup next refresh
         }
       } catch (error) {
-        debug.logError(Category.AUTH, 'Token refresh error', {}, error, COMPONENT_ID);
+        debug.logError(Category.AUTH, 'Token refresh error', { tabId }, error, COMPONENT_ID);
       }
     }, refreshTime);
   };
 
-  // FIXED: Remove loading from dependency array to prevent re-initialization
+  // Main authentication initialization useEffect
   useEffect(() => {
-    debug.logInfo(Category.LIFECYCLE, 'AuthProvider mounted', {}, COMPONENT_ID);
+    debug.logInfo(Category.LIFECYCLE, 'AuthProvider mounted', { tabId }, COMPONENT_ID);
     let mounted = true;
+
+    // Check if another tab is already handling auth
+    const existingTabId = localStorage.getItem('active_auth_tab');
+    const isMainTab = !existingTabId || existingTabId === tabId;
+    
+    if (isMainTab) {
+      localStorage.setItem('active_auth_tab', tabId);
+      debug.logInfo(Category.AUTH, 'This tab is handling auth initialization', { tabId }, COMPONENT_ID);
+    } else {
+      debug.logInfo(Category.AUTH, 'Another tab is handling auth, using existing session', { 
+        tabId, 
+        activeTab: existingTabId 
+      }, COMPONENT_ID);
+    }
 
     async function initializeAuth() {
       try {
         debug.startMark('auth-init');
         debug.logInfo(Category.AUTH, 'Starting auth initialization', {
-          attempt: initAttemptRef.current + 1
+          attempt: initAttemptRef.current + 1,
+          tabId,
+          isMainTab
         }, COMPONENT_ID);
         
         if (initTimeoutRef.current) {
           clearTimeout(initTimeoutRef.current);
         }
 
-        initTimeoutRef.current = setTimeout(() => {
-          if (mounted && !initialLoadComplete) {
-            debug.logWarning(Category.AUTH, 'Auth initialization timed out', {
-              attempt: initAttemptRef.current
-            }, COMPONENT_ID);
-            
-            if (initAttemptRef.current < 3) {
-              initAttemptRef.current++;
-              initializeAuth();
-            } else {
-              setLoading(false);
-              setInitialLoadComplete(true);
-              setSession(null);
+        // Only set timeout for main tab
+        if (isMainTab) {
+          initTimeoutRef.current = setTimeout(() => {
+            if (mounted && !initialLoadComplete) {
+              debug.logWarning(Category.AUTH, 'Auth initialization timed out', {
+                attempt: initAttemptRef.current,
+                tabId
+              }, COMPONENT_ID);
+              
+              if (initAttemptRef.current < 3) {
+                initAttemptRef.current++;
+                initializeAuth();
+              } else {
+                setLoading(false);
+                setInitialLoadComplete(true);
+                setSession(null);
+              }
             }
-          }
-        }, AUTH_TIMEOUT);
+          }, AUTH_TIMEOUT);
+        }
 
         const { data: { session: authSession }, error: sessionError } = await supabase.auth.getSession();
         
@@ -182,10 +208,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           debug.logInfo(Category.AUTH, 'Found valid auth session', {
             userId: authSession.user.id,
             email: authSession.user.email,
-            expiresAt: authSession.expires_at ? new Date(authSession.expires_at * 1000).toISOString() : 'unknown'
+            expiresAt: authSession.expires_at ? new Date(authSession.expires_at * 1000).toISOString() : 'unknown',
+            tabId
           }, COMPONENT_ID);
 
-          const profile = await ensureProfile(authSession.user.id);
+          // Only ensure profile on main tab to prevent conflicts
+          let profile = null;
+          if (isMainTab) {
+            profile = await ensureProfile(authSession.user.id);
+          } else {
+            // Secondary tabs just fetch existing profile
+            const { data: existingProfile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', authSession.user.id)
+              .maybeSingle();
+            profile = existingProfile;
+          }
 
           debug.endMark('auth-init', Category.AUTH);
 
@@ -199,10 +238,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             profile: profile || null,
           });
 
-          // Setup token refresh for this session
-          setupTokenRefresh(authSession);
+          // Only main tab handles token refresh
+          if (isMainTab) {
+            setupTokenRefresh(authSession);
+          }
         } else {
-          debug.logInfo(Category.AUTH, 'No active session found', {}, COMPONENT_ID);
+          debug.logInfo(Category.AUTH, 'No active session found', { tabId }, COMPONENT_ID);
           setSession(null);
         }
 
@@ -211,11 +252,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (error) {
         debug.logError(Category.AUTH, 'Auth initialization error', {
-          attempt: initAttemptRef.current
+          attempt: initAttemptRef.current,
+          tabId
         }, error, COMPONENT_ID);
         
         if (mounted) {
-          if (initAttemptRef.current < 3) {
+          if (initAttemptRef.current < 3 && isMainTab) {
             initAttemptRef.current++;
             setTimeout(initializeAuth, 1000 * Math.pow(2, initAttemptRef.current));
           } else {
@@ -233,22 +275,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, authSession) => {
       debug.logInfo(Category.AUTH, 'Auth state change', { 
         event, 
-        userId: authSession?.user?.id 
+        userId: authSession?.user?.id,
+        tabId
       }, COMPONENT_ID);
 
       if (!mounted) return;
 
-      // FIXED: Only set loading to true for initial load or explicit auth actions
+      // Only set loading to true for initial load or explicit auth actions
       if (!initialLoadComplete && event !== 'INITIAL_SESSION') {
         setLoading(true);
       }
 
       if (!authSession) {
         setSession(null);
-        if (refreshIntervalRef.current) {
+        if (refreshIntervalRef.current && isMainTab) {
           clearInterval(refreshIntervalRef.current);
         }
-        // FIXED: Don't set loading to false immediately for sign out
+        // Don't set loading to false immediately for sign out
         if (event === 'SIGNED_OUT') {
           setLoading(false);
         }
@@ -256,7 +299,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const profile = await ensureProfile(authSession.user.id);
+        // Only ensure profile on main tab or for explicit auth events
+        let profile = null;
+        if (isMainTab || event === 'SIGNED_IN' || event === 'SIGNED_UP') {
+          profile = await ensureProfile(authSession.user.id);
+        } else {
+          // Secondary tabs just fetch existing profile
+          const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', authSession.user.id)
+            .maybeSingle();
+          profile = existingProfile;
+        }
 
         if (!mounted) return;
 
@@ -268,12 +323,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           profile: profile || null,
         });
 
-        // Setup token refresh for new/refreshed sessions
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        // Setup token refresh for new/refreshed sessions (main tab only)
+        if (isMainTab && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
           setupTokenRefresh(authSession);
         }
       } catch (error) {
-        debug.logError(Category.AUTH, 'Error in auth change handler', {}, error, COMPONENT_ID);
+        debug.logError(Category.AUTH, 'Error in auth change handler', { tabId }, error, COMPONENT_ID);
         if (mounted) {
           setSession(null);
         }
@@ -289,133 +344,156 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       debug.logInfo(Category.LIFECYCLE, 'AuthProvider cleanup', {
         hadInitTimeout: !!initTimeoutRef.current,
-        hadRefreshInterval: !!refreshIntervalRef.current
+        hadRefreshInterval: !!refreshIntervalRef.current,
+        tabId,
+        wasMainTab: isMainTab
       }, COMPONENT_ID);
+      
+      // Clean up tab ID if this was the main tab
+      if (isMainTab && localStorage.getItem('active_auth_tab') === tabId) {
+        localStorage.removeItem('active_auth_tab');
+      }
       
       mounted = false;
       if (initTimeoutRef.current) {
         clearTimeout(initTimeoutRef.current);
       }
-      if (refreshIntervalRef.current) {
+      if (refreshIntervalRef.current && isMainTab) {
         clearInterval(refreshIntervalRef.current);
       }
       subscription.unsubscribe();
     };
-  }, []); // FIXED: Empty dependency array
+  }, []); // Empty dependency array
 
-// Replace your existing multi-tab useEffect with this version:
-
-// Multi-tab synchronization effect
-useEffect(() => {
-  // Add random delay to prevent all tabs from making requests simultaneously
-  const tabDelay = Math.random() * 1000; // 0-1 second random delay
-  
-  const delayedSetup = setTimeout(() => {
+  // Multi-tab synchronization effect
+  useEffect(() => {
+    // Add random delay to prevent all tabs from making requests simultaneously
+    const tabDelay = Math.random() * 1000; // 0-1 second random delay
     
-    // Listen for storage events (token changes in other tabs)
-    const handleStorageChange = async (e: StorageEvent) => {
-      // Supabase uses localStorage for session storage
-      if (e.key?.includes('supabase.auth.token') || e.key === 'supabase.auth.token') {
-        debug.logInfo(Category.AUTH, 'Token changed in another tab, refreshing session', {}, COMPONENT_ID);
+    const delayedSetup = setTimeout(() => {
+      
+      // Listen for storage events (token changes in other tabs)
+      const handleStorageChange = async (e: StorageEvent) => {
+        // Supabase uses localStorage for session storage
+        if (e.key?.includes('supabase.auth.token') || e.key === 'supabase.auth.token') {
+          debug.logInfo(Category.AUTH, 'Token changed in another tab, refreshing session', { tabId }, COMPONENT_ID);
+          
+          // Add small delay to prevent race conditions
+          await new Promise(resolve => setTimeout(resolve, 200));
+          
+          try {
+            const { data: { session }, error } = await supabase.auth.getSession();
+            
+            if (error) {
+              debug.logError(Category.AUTH, 'Error refreshing session from storage change', { tabId }, error, COMPONENT_ID);
+              return;
+            }
+
+            if (!mountedRef.current) return;
+
+            if (session?.user) {
+              // Just fetch existing profile for tab sync
+              const { data: existingProfile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', session.user.id)
+                .maybeSingle();
+              
+              setSession({
+                user: {
+                  id: session.user.id,
+                  email: session.user.email!,
+                },
+                profile: existingProfile || null,
+              });
+              
+              // Only main tab handles token refresh
+              const isMainTab = localStorage.getItem('active_auth_tab') === tabId;
+              if (isMainTab) {
+                setupTokenRefresh(session);
+              }
+            } else {
+              setSession(null);
+              if (refreshIntervalRef.current) {
+                clearInterval(refreshIntervalRef.current);
+              }
+            }
+          } catch (error) {
+            debug.logError(Category.AUTH, 'Error handling storage change', { tabId }, error, COMPONENT_ID);
+          }
+        }
+      };
+
+      // Listen for focus events (tab becomes active)
+      const handleFocus = async () => {
+        if (!session) return;
         
-        // Add small delay to prevent race conditions
-        await new Promise(resolve => setTimeout(resolve, 200));
+        debug.logInfo(Category.AUTH, 'Tab focused, checking session validity', { tabId }, COMPONENT_ID);
+        
+        // Add small delay to prevent immediate API calls when switching tabs
+        await new Promise(resolve => setTimeout(resolve, 100));
         
         try {
-          const { data: { session }, error } = await supabase.auth.getSession();
+          const { data: { session: currentSession }, error } = await supabase.auth.getSession();
           
-          if (error) {
-            debug.logError(Category.AUTH, 'Error refreshing session from storage change', {}, error, COMPONENT_ID);
-            return;
-          }
-
-          if (!mountedRef.current) return;
-
-          if (session?.user) {
-            const profile = await ensureProfile(session.user.id);
-            
-            setSession({
-              user: {
-                id: session.user.id,
-                email: session.user.email!,
-              },
-              profile: profile || null,
-            });
-            
-            setupTokenRefresh(session);
-          } else {
+          if (error || !currentSession) {
+            debug.logWarning(Category.AUTH, 'Session invalid on focus, signing out', { tabId }, COMPONENT_ID);
             setSession(null);
             if (refreshIntervalRef.current) {
               clearInterval(refreshIntervalRef.current);
             }
+            return;
+          }
+
+          // Check if token is different (updated in another tab)
+          if (currentSession.access_token !== session.user.id) {
+            debug.logInfo(Category.AUTH, 'Session updated in another tab, refreshing', { tabId }, COMPONENT_ID);
+            
+            // Just fetch existing profile for tab sync
+            const { data: existingProfile } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', currentSession.user.id)
+              .maybeSingle();
+            
+            setSession({
+              user: {
+                id: currentSession.user.id,
+                email: currentSession.user.email!,
+              },
+              profile: existingProfile || null,
+            });
+            
+            // Only main tab handles token refresh
+            const isMainTab = localStorage.getItem('active_auth_tab') === tabId;
+            if (isMainTab) {
+              setupTokenRefresh(currentSession);
+            }
           }
         } catch (error) {
-          debug.logError(Category.AUTH, 'Error handling storage change', {}, error, COMPONENT_ID);
+          debug.logError(Category.AUTH, 'Error checking session on focus', { tabId }, error, COMPONENT_ID);
         }
-      }
-    };
+      };
 
-    // Listen for focus events (tab becomes active)
-    const handleFocus = async () => {
-      if (!session) return;
-      
-      debug.logInfo(Category.AUTH, 'Tab focused, checking session validity', {}, COMPONENT_ID);
-      
-      // Add small delay to prevent immediate API calls when switching tabs
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      try {
-        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
-        
-        if (error || !currentSession) {
-          debug.logWarning(Category.AUTH, 'Session invalid on focus, signing out', {}, COMPONENT_ID);
-          setSession(null);
-          if (refreshIntervalRef.current) {
-            clearInterval(refreshIntervalRef.current);
-          }
-          return;
-        }
+      window.addEventListener('storage', handleStorageChange);
+      window.addEventListener('focus', handleFocus);
 
-        // Check if token is different (updated in another tab)
-        if (currentSession.access_token !== session.user.id) {
-          debug.logInfo(Category.AUTH, 'Session updated in another tab, refreshing', {}, COMPONENT_ID);
-          
-          const profile = await ensureProfile(currentSession.user.id);
-          
-          setSession({
-            user: {
-              id: currentSession.user.id,
-              email: currentSession.user.email!,
-            },
-            profile: profile || null,
-          });
-          
-          setupTokenRefresh(currentSession);
-        }
-      } catch (error) {
-        debug.logError(Category.AUTH, 'Error checking session on focus', {}, error, COMPONENT_ID);
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('focus', handleFocus);
+      return () => {
+        window.removeEventListener('storage', handleStorageChange);
+        window.removeEventListener('focus', handleFocus);
+      };
+      
+    }, tabDelay);
 
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('focus', handleFocus);
+      clearTimeout(delayedSetup);
     };
-    
-  }, tabDelay);
-
-  return () => {
-    clearTimeout(delayedSetup);
-  };
-}, [session]);
+  }, [session, tabId]);
 
   const signIn = async (email: string, password: string) => {
     try {
       debug.startMark('sign-in');
-      debug.logInfo(Category.AUTH, 'Starting sign in process', { email }, COMPONENT_ID);
+      debug.logInfo(Category.AUTH, 'Starting sign in process', { email, tabId }, COMPONENT_ID);
       setLoading(true);
       
       const { data, error } = await supabase.auth.signInWithPassword({
@@ -430,7 +508,8 @@ useEffect(() => {
       if (data.user && data.session) {
         debug.logInfo(Category.AUTH, 'Sign in successful', {
           userId: data.user.id,
-          email: data.user.email
+          email: data.user.email,
+          tabId
         }, COMPONENT_ID);
 
         const profile = await ensureProfile(data.user.id);
@@ -445,9 +524,12 @@ useEffect(() => {
 
         // Setup token refresh for new session
         setupTokenRefresh(data.session);
+        
+        // Mark this tab as the main auth tab
+        localStorage.setItem('active_auth_tab', tabId);
       }
     } catch (error) {
-      debug.logError(Category.AUTH, 'Sign in process failed', {}, error, COMPONENT_ID);
+      debug.logError(Category.AUTH, 'Sign in process failed', { tabId }, error, COMPONENT_ID);
       throw error;
     } finally {
       setLoading(false);
@@ -457,7 +539,7 @@ useEffect(() => {
   const signUp = async (email: string, password: string, fullName: string, companyName: string, phone?: string) => {
     try {
       debug.startMark('sign-up');
-      debug.logInfo(Category.AUTH, 'Starting sign up process', { email }, COMPONENT_ID);
+      debug.logInfo(Category.AUTH, 'Starting sign up process', { email, tabId }, COMPONENT_ID);
       setLoading(true);
 
       const { data: { user, session: authSession }, error: signUpError } = await supabase.auth.signUp({
@@ -477,7 +559,8 @@ useEffect(() => {
       if (user) {
         debug.logInfo(Category.AUTH, 'User created successfully', {
           userId: user.id,
-          email: user.email
+          email: user.email,
+          tabId
         }, COMPONENT_ID);
 
         const profile = await ensureProfile(user.id, { fullName, companyName, phone, email });
@@ -494,15 +577,19 @@ useEffect(() => {
         if (authSession) {
           setupTokenRefresh(authSession);
         }
+        
+        // Mark this tab as the main auth tab
+        localStorage.setItem('active_auth_tab', tabId);
 
         debug.logInfo(Category.AUTH, 'Sign up completed successfully', {
-          userId: user.id
+          userId: user.id,
+          tabId
         }, COMPONENT_ID);
       }
 
       debug.endMark('sign-up', Category.AUTH);
     } catch (error) {
-      debug.logError(Category.AUTH, 'Sign up process failed', {}, error, COMPONENT_ID);
+      debug.logError(Category.AUTH, 'Sign up process failed', { tabId }, error, COMPONENT_ID);
       throw error;
     } finally {
       setLoading(false);
@@ -512,12 +599,17 @@ useEffect(() => {
   const signOut = async () => {
     try {
       debug.startMark('sign-out');
-      debug.logInfo(Category.AUTH, 'Starting sign out process', {}, COMPONENT_ID);
+      debug.logInfo(Category.AUTH, 'Starting sign out process', { tabId }, COMPONENT_ID);
       setLoading(true);
       
       // Clear refresh interval before signing out
       if (refreshIntervalRef.current) {
         clearInterval(refreshIntervalRef.current);
+      }
+      
+      // Clear main tab designation
+      if (localStorage.getItem('active_auth_tab') === tabId) {
+        localStorage.removeItem('active_auth_tab');
       }
       
       const { error } = await supabase.auth.signOut();
@@ -526,10 +618,10 @@ useEffect(() => {
 
       if (error) throw error;
       
-      debug.logInfo(Category.AUTH, 'Sign out successful', {}, COMPONENT_ID);
+      debug.logInfo(Category.AUTH, 'Sign out successful', { tabId }, COMPONENT_ID);
       setSession(null);
     } catch (error) {
-      debug.logError(Category.AUTH, 'Sign out process failed', {}, error, COMPONENT_ID);
+      debug.logError(Category.AUTH, 'Sign out process failed', { tabId }, error, COMPONENT_ID);
       throw error;
     } finally {
       setLoading(false);
