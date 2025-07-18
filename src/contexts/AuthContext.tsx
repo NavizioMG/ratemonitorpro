@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Setup automatic token refresh
+  // Setup automatic token refresh (ONLY for main tab)
   const setupTokenRefresh = (authSession: any) => {
     if (refreshIntervalRef.current) {
       clearInterval(refreshIntervalRef.current);
@@ -113,20 +113,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (!authSession?.expires_at) return;
 
+    // Only setup token refresh if this is the main tab
+    const isMainTab = localStorage.getItem('active_auth_tab') === tabId;
+    if (!isMainTab) {
+      debug.logInfo(Category.AUTH, 'Skipping token refresh setup - not main tab', { tabId }, COMPONENT_ID);
+      return;
+    }
+
     const expiresAt = authSession.expires_at * 1000; // Convert to milliseconds
     const now = Date.now();
     const timeUntilExpiry = expiresAt - now;
     const refreshTime = Math.max(timeUntilExpiry - 5 * 60 * 1000, 60000); // Refresh 5 min before expiry, min 1 min
 
-    debug.logInfo(Category.AUTH, 'Setting up token refresh', {
+    debug.logInfo(Category.AUTH, 'Setting up token refresh (main tab only)', {
       expiresAt: new Date(expiresAt).toISOString(),
       refreshIn: Math.round(refreshTime / 1000) + 's',
       tabId
     }, COMPONENT_ID);
 
     refreshIntervalRef.current = setTimeout(async () => {
+      // Double-check we're still the main tab before refreshing
+      const currentMainTab = localStorage.getItem('active_auth_tab');
+      if (currentMainTab !== tabId) {
+        debug.logInfo(Category.AUTH, 'No longer main tab, skipping refresh', { 
+          tabId, 
+          currentMainTab 
+        }, COMPONENT_ID);
+        return;
+      }
+
       try {
-        debug.logInfo(Category.AUTH, 'Refreshing session token', { tabId }, COMPONENT_ID);
+        debug.logInfo(Category.AUTH, 'Refreshing session token (main tab)', { tabId }, COMPONENT_ID);
         const { data: { session: refreshedSession }, error } = await supabase.auth.refreshSession();
         
         if (error) {
@@ -408,8 +425,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               });
               
               // Only main tab handles token refresh
-              const isMainTab = localStorage.getItem('active_auth_tab') === tabId;
-              if (isMainTab) {
+              const currentMainTab = localStorage.getItem('active_auth_tab');
+              if (currentMainTab === tabId) {
                 setupTokenRefresh(session);
               }
             } else {
@@ -465,8 +482,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
             
             // Only main tab handles token refresh
-            const isMainTab = localStorage.getItem('active_auth_tab') === tabId;
-            if (isMainTab) {
+            const currentMainTab = localStorage.getItem('active_auth_tab');
+            if (currentMainTab === tabId) {
               setupTokenRefresh(currentSession);
             }
           }
