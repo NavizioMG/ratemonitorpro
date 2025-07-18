@@ -51,10 +51,10 @@ export function Settings() {
       }
 
       const { data: prefsData, error: prefsError } = await supabase
-        .from('notification_prefs')
-        .select('email_notifications, rate_alerts, system_updates')
-        .eq('user_id', session.user.id)
-        .single();
+      .from('notification_prefs')
+      .select('email_notifications, rate_alerts, system_updates')
+      .eq('user_id', session.user.id)
+      .maybeSingle();
 
       if (prefsError && prefsError.code !== 'PGRST116') {
         console.error('Prefs fetch error:', prefsError);
