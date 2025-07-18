@@ -16,7 +16,7 @@ import { RateTracking } from './pages/RateTracking';
 import { Notifications } from './pages/Notifications';
 import { Settings } from './pages/Settings';
 import { Billing } from './pages/Billing';
-import { PublicRoute } from './components/auth/PublicRoute';
+import { PublicRoute } from './components/auth/PrivateRoute';
 import { PrivateRoute } from './components/auth/PrivateRoute';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 import { Careers } from './pages/Careers';

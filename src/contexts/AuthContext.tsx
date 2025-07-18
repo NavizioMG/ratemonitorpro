@@ -12,6 +12,7 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, fullName: string, companyName: string, phone?: string) => Promise<void>;
   signOut: () => Promise<void>;
+  isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,13 +20,15 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
   const mountedRef = useRef(true);
   const initTimeoutRef = useRef<NodeJS.Timeout>();
   const initAttemptRef = useRef(0);
+  const refreshIntervalRef = useRef<NodeJS.Timeout>();
 
   const ensureProfile = async (
     userId: string,
-    userData?: { fullName?: string; companyName?: string; phone?: string }
+    userData?: { fullName?: string; companyName?: string; phone?: string; email?: string }
   ) => {
     try {
       // Wait a short time to ensure auth user is fully created
@@ -97,6 +100,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Setup automatic token refresh
+  const setupTokenRefresh = (authSession: any) => {
+    if (refreshIntervalRef.current) {
+      clearInterval(refreshIntervalRef.current);
+    }
+
+    if (!authSession?.expires_at) return;
+
+    const expiresAt = authSession.expires_at * 1000; // Convert to milliseconds
+    const now = Date.now();
+    const timeUntilExpiry = expiresAt - now;
+    const refreshTime = Math.max(timeUntilExpiry - 5 * 60 * 1000, 60000); // Refresh 5 min before expiry, min 1 min
+
+    debug.logInfo(Category.AUTH, 'Setting up token refresh', {
+      expiresAt: new Date(expiresAt).toISOString(),
+      refreshIn: Math.round(refreshTime / 1000) + 's'
+    }, COMPONENT_ID);
+
+    refreshIntervalRef.current = setTimeout(async () => {
+      try {
+        debug.logInfo(Category.AUTH, 'Refreshing session token', {}, COMPONENT_ID);
+        const { data: { session: refreshedSession }, error } = await supabase.auth.refreshSession();
+        
+        if (error) {
+          debug.logError(Category.AUTH, 'Token refresh failed', {}, error, COMPONENT_ID);
+          // Don't sign out immediately, let the auth state change handler deal with it
+          return;
+        }
+
+        if (refreshedSession) {
+          debug.logInfo(Category.AUTH, 'Token refreshed successfully', {}, COMPONENT_ID);
+          setupTokenRefresh(refreshedSession); // Setup next refresh
+        }
+      } catch (error) {
+        debug.logError(Category.AUTH, 'Token refresh error', {}, error, COMPONENT_ID);
+      }
+    }, refreshTime);
+  };
+
+  // FIXED: Remove loading from dependency array to prevent re-initialization
   useEffect(() => {
     debug.logInfo(Category.LIFECYCLE, 'AuthProvider mounted', {}, COMPONENT_ID);
     let mounted = true;
@@ -113,7 +156,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         initTimeoutRef.current = setTimeout(() => {
-          if (mounted && loading) {
+          if (mounted && !initialLoadComplete) {
             debug.logWarning(Category.AUTH, 'Auth initialization timed out', {
               attempt: initAttemptRef.current
             }, COMPONENT_ID);
@@ -123,6 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               initializeAuth();
             } else {
               setLoading(false);
+              setInitialLoadComplete(true);
               setSession(null);
             }
           }
@@ -137,7 +181,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (authSession?.user) {
           debug.logInfo(Category.AUTH, 'Found valid auth session', {
             userId: authSession.user.id,
-            email: authSession.user.email
+            email: authSession.user.email,
+            expiresAt: authSession.expires_at ? new Date(authSession.expires_at * 1000).toISOString() : 'unknown'
           }, COMPONENT_ID);
 
           const profile = await ensureProfile(authSession.user.id);
@@ -153,6 +198,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             },
             profile: profile || null,
           });
+
+          // Setup token refresh for this session
+          setupTokenRefresh(authSession);
         } else {
           debug.logInfo(Category.AUTH, 'No active session found', {}, COMPONENT_ID);
           setSession(null);
@@ -177,6 +225,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } finally {
         if (mounted) {
           setLoading(false);
+          setInitialLoadComplete(true);
         }
       }
     }
@@ -189,9 +238,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (!mounted) return;
 
+      // FIXED: Only set loading to true for initial load or explicit auth actions
+      if (!initialLoadComplete && event !== 'INITIAL_SESSION') {
+        setLoading(true);
+      }
+
       if (!authSession) {
         setSession(null);
-        setLoading(false);
+        if (refreshIntervalRef.current) {
+          clearInterval(refreshIntervalRef.current);
+        }
+        // FIXED: Don't set loading to false immediately for sign out
+        if (event === 'SIGNED_OUT') {
+          setLoading(false);
+        }
         return;
       }
 
@@ -207,13 +267,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
           profile: profile || null,
         });
+
+        // Setup token refresh for new/refreshed sessions
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          setupTokenRefresh(authSession);
+        }
       } catch (error) {
         debug.logError(Category.AUTH, 'Error in auth change handler', {}, error, COMPONENT_ID);
         if (mounted) {
           setSession(null);
         }
       } finally {
-        if (mounted) {
+        if (mounted && !initialLoadComplete) {
           setLoading(false);
         }
       }
@@ -223,16 +288,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       debug.logInfo(Category.LIFECYCLE, 'AuthProvider cleanup', {
-        hadInitTimeout: !!initTimeoutRef.current
+        hadInitTimeout: !!initTimeoutRef.current,
+        hadRefreshInterval: !!refreshIntervalRef.current
       }, COMPONENT_ID);
       
       mounted = false;
       if (initTimeoutRef.current) {
         clearTimeout(initTimeoutRef.current);
       }
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
       subscription.unsubscribe();
     };
-  }, [loading]);
+  }, []); // FIXED: Empty dependency array
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -249,7 +318,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error;
 
-      if (data.user) {
+      if (data.user && data.session) {
         debug.logInfo(Category.AUTH, 'Sign in successful', {
           userId: data.user.id,
           email: data.user.email
@@ -264,6 +333,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
           profile: profile || null,
         });
+
+        // Setup token refresh for new session
+        setupTokenRefresh(data.session);
       }
     } catch (error) {
       debug.logError(Category.AUTH, 'Sign in process failed', {}, error, COMPONENT_ID);
@@ -279,7 +351,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       debug.logInfo(Category.AUTH, 'Starting sign up process', { email }, COMPONENT_ID);
       setLoading(true);
 
-      const { data: { user }, error: signUpError } = await supabase.auth.signUp({
+      const { data: { user, session: authSession }, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -299,7 +371,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: user.email
         }, COMPONENT_ID);
 
-        const profile = await ensureProfile(user.id, { fullName, companyName, phone });
+        const profile = await ensureProfile(user.id, { fullName, companyName, phone, email });
 
         setSession({
           user: {
@@ -308,6 +380,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
           profile: profile || null,
         });
+
+        // Setup token refresh if we have a session
+        if (authSession) {
+          setupTokenRefresh(authSession);
+        }
 
         debug.logInfo(Category.AUTH, 'Sign up completed successfully', {
           userId: user.id
@@ -329,6 +406,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       debug.logInfo(Category.AUTH, 'Starting sign out process', {}, COMPONENT_ID);
       setLoading(true);
       
+      // Clear refresh interval before signing out
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+      }
+      
       const { error } = await supabase.auth.signOut();
       
       debug.endMark('sign-out', Category.AUTH);
@@ -346,7 +428,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ session, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ 
+      session, 
+      loading, 
+      signIn, 
+      signUp, 
+      signOut,
+      isAuthenticated: !!session?.user
+    }}>
       {children}
     </AuthContext.Provider>
   );
