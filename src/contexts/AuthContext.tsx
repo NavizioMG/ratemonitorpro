@@ -303,6 +303,96 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []); // FIXED: Empty dependency array
 
+  // Multi-tab synchronization effect
+useEffect(() => {
+  // Listen for storage events (token changes in other tabs)
+  const handleStorageChange = async (e: StorageEvent) => {
+    // Supabase uses localStorage for session storage
+    if (e.key?.includes('supabase.auth.token') || e.key === 'supabase.auth.token') {
+      debug.logInfo(Category.AUTH, 'Token changed in another tab, refreshing session', {}, COMPONENT_ID);
+      
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          debug.logError(Category.AUTH, 'Error refreshing session from storage change', {}, error, COMPONENT_ID);
+          return;
+        }
+
+        if (!mountedRef.current) return;
+
+        if (session?.user) {
+          const profile = await ensureProfile(session.user.id);
+          
+          setSession({
+            user: {
+              id: session.user.id,
+              email: session.user.email!,
+            },
+            profile: profile || null,
+          });
+          
+          setupTokenRefresh(session);
+        } else {
+          setSession(null);
+          if (refreshIntervalRef.current) {
+            clearInterval(refreshIntervalRef.current);
+          }
+        }
+      } catch (error) {
+        debug.logError(Category.AUTH, 'Error handling storage change', {}, error, COMPONENT_ID);
+      }
+    }
+  };
+
+  // Listen for focus events (tab becomes active)
+  const handleFocus = async () => {
+    if (!session) return;
+    
+    debug.logInfo(Category.AUTH, 'Tab focused, checking session validity', {}, COMPONENT_ID);
+    
+    try {
+      const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+      
+      if (error || !currentSession) {
+        debug.logWarning(Category.AUTH, 'Session invalid on focus, signing out', {}, COMPONENT_ID);
+        setSession(null);
+        if (refreshIntervalRef.current) {
+          clearInterval(refreshIntervalRef.current);
+        }
+        return;
+      }
+
+      // Check if token is different (updated in another tab)
+      if (currentSession.access_token !== session.user.id) {
+        debug.logInfo(Category.AUTH, 'Session updated in another tab, refreshing', {}, COMPONENT_ID);
+        
+        const profile = await ensureProfile(currentSession.user.id);
+        
+        setSession({
+          user: {
+            id: currentSession.user.id,
+            email: currentSession.user.email!,
+          },
+          profile: profile || null,
+        });
+        
+        setupTokenRefresh(currentSession);
+      }
+    } catch (error) {
+      debug.logError(Category.AUTH, 'Error checking session on focus', {}, error, COMPONENT_ID);
+    }
+  };
+
+  window.addEventListener('storage', handleStorageChange);
+  window.addEventListener('focus', handleFocus);
+
+  return () => {
+    window.removeEventListener('storage', handleStorageChange);
+    window.removeEventListener('focus', handleFocus);
+  };
+  }, [session]); // Just session dependency
+
   const signIn = async (email: string, password: string) => {
     try {
       debug.startMark('sign-in');
