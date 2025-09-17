@@ -42,6 +42,29 @@ export function CompleteSignup() {
           throw new Error(`Invalid email format: ${fixedEmail}`);
         }
 
+        // 🔍 DEBUG: Let's see what data we have
+console.log('🔧 Debug - Available signup data:', {
+  email: fixedEmail,
+  fullName,
+  companyName,
+  phone,
+  timezone,
+  password: password ? 'Present' : 'Missing'
+});
+
+console.log('🔧 Debug - Search params:', {
+  success: searchParams.get('success'),
+  email: searchParams.get('email'),
+  fullName: searchParams.get('fullName'),
+  // ... all search params
+});
+
+console.log('🔧 Debug - LocalStorage:', {
+  signupEmail: localStorage.getItem('signupEmail'),
+  signupFullName: localStorage.getItem('signupFullName'),
+  // ... all localStorage items
+});
+
         // Create GHL sub-account via Edge Function
         console.log('🔧 Creating GHL sub-account via Edge Function');
         
