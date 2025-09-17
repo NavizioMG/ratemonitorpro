@@ -1,14 +1,21 @@
-// src/services/stripe.ts - Improved Version
+// src/services/stripe.ts - Fixed for Test/Live Suffixes
 
 import { loadStripe } from '@stripe/stripe-js';
 import { debug, Category } from '../lib/debug';
 
 const COMPONENT_ID = 'StripeService';
 
-// 🔧 FIX: Environment-based configuration
+// 🔧 FIX: Environment-based configuration with Test/Live suffixes
 const STRIPE_MODE = import.meta.env.VITE_STRIPE_MODE || 'test'; // 'test' or 'live'
-const STRIPE_PUBLISHABLE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
-const STRIPE_PRICE_ID = import.meta.env.VITE_STRIPE_PRICE_ID || '';
+
+// 🔧 FIX: Select the right keys based on mode
+const STRIPE_PUBLISHABLE_KEY = STRIPE_MODE === 'live' 
+  ? import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY_LIVE 
+  : import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY_TEST;
+
+const STRIPE_PRICE_ID = STRIPE_MODE === 'live'
+  ? import.meta.env.VITE_STRIPE_PRICE_ID_LIVE
+  : import.meta.env.VITE_STRIPE_PRICE_ID_TEST;
 
 const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
@@ -17,15 +24,19 @@ console.log('🔧 Stripe Mode:', STRIPE_MODE);
 console.log('🔧 Using Price ID:', STRIPE_PRICE_ID);
 console.log('🔧 Using Publishable Key:', STRIPE_PUBLISHABLE_KEY?.substring(0, 20) + '...');
 
-// 🔍 DEBUG: Add this temporary debug line
-console.log('🔧 All Stripe Env Vars:', {
+// 🔍 DEBUG: Show all available env vars
+console.log('🔧 Available Env Vars:', {
   mode: import.meta.env.VITE_STRIPE_MODE,
-  priceId: import.meta.env.VITE_STRIPE_PRICE_ID,
-  publishableKey: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY?.substring(0, 20)
+  testPrice: import.meta.env.VITE_STRIPE_PRICE_ID_TEST,
+  livePrice: import.meta.env.VITE_STRIPE_PRICE_ID_LIVE,
+  testKey: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY_TEST?.substring(0, 20),
+  liveKey: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY_LIVE?.substring(0, 20),
+  selectedPrice: STRIPE_PRICE_ID,
+  selectedKey: STRIPE_PUBLISHABLE_KEY?.substring(0, 20)
 });
 
 export const STANDARD_PLAN = {
-  id: STRIPE_PRICE_ID, // 🔧 FIX: Now uses environment variable
+  id: STRIPE_PRICE_ID, // 🔧 FIX: Now uses environment variable based on mode
   name: 'Standard',
   price: 49.99,
   interval: 'month',
@@ -50,15 +61,15 @@ export function getAppUrl(): string {
 // 🔧 FIX: Add validation for required environment variables
 function validateStripeConfig() {
   if (!STRIPE_PUBLISHABLE_KEY) {
-    throw new Error('VITE_STRIPE_PUBLISHABLE_KEY is required');
+    throw new Error(`VITE_STRIPE_PUBLISHABLE_KEY_${STRIPE_MODE.toUpperCase()} is required`);
   }
   if (!STRIPE_PRICE_ID) {
-    throw new Error('VITE_STRIPE_PRICE_ID is required');
+    throw new Error(`VITE_STRIPE_PRICE_ID_${STRIPE_MODE.toUpperCase()} is required`);
   }
   
   // Validate key matches mode
-  const isTestKey = STRIPE_PUBLISHABLE_KEY.startsWith('pk_test_');
-  const isLiveKey = STRIPE_PUBLISHABLE_KEY.startsWith('pk_live_');
+  const isTestKey = STRIPE_PUBLISHABLE_KEY?.startsWith('pk_test_');
+  const isLiveKey = STRIPE_PUBLISHABLE_KEY?.startsWith('pk_live_');
   
   if (STRIPE_MODE === 'test' && !isTestKey) {
     console.warn('⚠️ STRIPE_MODE is "test" but using live key!');
