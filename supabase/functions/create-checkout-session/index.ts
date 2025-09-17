@@ -55,7 +55,7 @@ serve(async (req) => {
         price: stripePriceId, // 🔧 FIX: Now uses environment variable
         quantity: 1 
       }],
-      success_url: `${Deno.env.get("APP_URL")}/auth/complete-signup?success=true`,
+      success_url: `${Deno.env.get("APP_URL")}/complete-signup?success=true`,
       cancel_url: `${Deno.env.get("APP_URL")}/auth?canceled=true`,
     });
 
