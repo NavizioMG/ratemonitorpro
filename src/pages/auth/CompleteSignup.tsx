@@ -13,25 +13,8 @@ export function CompleteSignup() {
   const hasRun = useRef(false);
   const { session, loading: authLoading, isAuthenticated } = useAuth();
 
-  // Redirect when auth is ready
-  useEffect(() => {
-    // Debug: Log what auth context sees
-    console.log('Auth Debug:', { 
-      completed, 
-      isAuthenticated, 
-      authLoading, 
-      hasSession: !!session,
-      userId: session?.user?.id 
-    });
-    
-    if (completed && isAuthenticated && !authLoading) {
-      setTimeout(() => navigate('/dashboard', { replace: true }), 500);
-    } else if (completed && session?.user?.id && !authLoading) {
-      // Fallback: if we have a session but isAuthenticated is false, still redirect
-      console.log('Fallback redirect - session exists but isAuthenticated is false');
-      setTimeout(() => navigate('/dashboard', { replace: true }), 500);
-    }
-  }, [completed, isAuthenticated, authLoading, navigate, session]);
+  // Remove the AuthContext-dependent redirect logic
+  // The direct redirect is now handled in the signup function
 
   useEffect(() => {
     if (hasRun.current) return;
@@ -167,7 +150,7 @@ export function CompleteSignup() {
           // Non-critical - continue
         }
 
-        // Simple auth check - just verify session exists
+        // Simple auth check - verify session exists and redirect
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         const { data: { session: currentSession } } = await supabase.auth.getSession();
@@ -178,6 +161,9 @@ export function CompleteSignup() {
         localStorage.clear();
         setCompleted(true);
         setLoading(false);
+        
+        // Direct redirect - don't wait for AuthContext
+        setTimeout(() => navigate('/dashboard', { replace: true }), 1000);
 
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to complete signup');
@@ -251,15 +237,12 @@ export function CompleteSignup() {
           Welcome to <span className="text-primary">Rate Monitor Pro</span>!
         </h2>
         <p className="text-gray-600 mb-6">
-          {authLoading || !isAuthenticated 
-            ? 'Setting up your dashboard access...' 
-            : 'Your account is ready. Redirecting to dashboard...'
-          }
+          Your account is ready. Redirecting to dashboard...
         </p>
         <div className="flex justify-center">
           <div className="animate-pulse inline-flex items-center text-sm text-gray-500">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
-            {authLoading || !isAuthenticated ? 'Finalizing...' : 'Redirecting...'}
+            Redirecting...
           </div>
         </div>
         <p className="text-gray-400 text-xs mt-6">
