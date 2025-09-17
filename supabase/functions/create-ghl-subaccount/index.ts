@@ -6,12 +6,6 @@ const GHL_AGENCY_API_KEY = Deno.env.get("GHL_AGENCY_API_KEY") || ""; // For sub-
 const GHL_COMPANY_ID = Deno.env.get("GHL_COMPANY_ID") || "";
 const RMP_LOCATION_ID = Deno.env.get("RMP_LOCATION_ID") || "";
 
-console.log("🔧 [create-subaccount] Environment check:", {
-  hasGHL_AGENCY_API_KEY: !!GHL_AGENCY_API_KEY,
-  hasGHL_COMPANY_ID: !!GHL_COMPANY_ID,
-  hasRMP_LOCATION_ID: !!RMP_LOCATION_ID
-});
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -20,8 +14,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log("🔧 [create-subaccount] Request received:", req.method);
-
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -29,14 +21,6 @@ serve(async (req) => {
 
   try {
     const { userId, companyName, email, phone = '', address = '', fullName, timezone } = await req.json();
-
-    console.log("🔧 [create-subaccount] Request data:", {
-      userId,
-      companyName,
-      email,
-      fullName,
-      phone: phone || "none"
-    });
 
     // Validate required fields
     if (!userId || !companyName || !email) {
@@ -56,8 +40,6 @@ serve(async (req) => {
     // Parse name for GHL
     const [firstName, ...lastNameParts] = (fullName || email.split('@')[0]).split(' ');
     const lastName = lastNameParts.join(' ') || '';
-
-    console.log('🔧 [create-subaccount] Creating GHL sub-account for:', { userId, companyName });
 
     // Create sub-account in GHL with company ID
     const locationData = {
@@ -86,12 +68,8 @@ serve(async (req) => {
       body: JSON.stringify(locationData)
     });
 
-    console.log('🔧 [create-subaccount] GHL API response status:', ghlResponse.status);
-    console.log('🔧 [create-subaccount] GHL API response headers:', Object.fromEntries(ghlResponse.headers.entries()));
-
     if (!ghlResponse.ok) {
       const errorText = await ghlResponse.text(); // Get as text first
-      console.error('🔧 [create-subaccount] GHL API error (text):', errorText);
       
       let errorData;
       try {
@@ -104,19 +82,13 @@ serve(async (req) => {
     }
 
     const ghlDataText = await ghlResponse.text();
-    console.log('🔧 [create-subaccount] GHL API raw response:', ghlDataText.substring(0, 500));
     
     let ghlData;
     try {
       ghlData = JSON.parse(ghlDataText);
     } catch (e) {
-      console.error('🔧 [create-subaccount] Failed to parse GHL response as JSON');
       throw new Error(`Invalid JSON response from GHL: ${ghlDataText.substring(0, 200)}`);
     }
-    console.log('🔧 [create-subaccount] GHL sub-account created:', {
-      locationId: ghlData.location?.id,
-      hasApiKey: !!ghlData.location?.apiKey
-    });
 
     const newLocationId = ghlData.location?.id;
     const newApiKey = ghlData.location?.apiKey;
@@ -140,7 +112,6 @@ serve(async (req) => {
       .single();
 
     if (subaccountError) {
-      console.error('🔧 [create-subaccount] Supabase error:', subaccountError);
       throw subaccountError;
     }
 
@@ -151,7 +122,6 @@ serve(async (req) => {
       .eq('id', userId);
 
     if (profileError) {
-      console.error('🔧 [create-subaccount] Profile update error:', profileError);
       throw profileError;
     }
 
@@ -171,7 +141,6 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('🔧 [create-subaccount] Error:', error);
     return new Response(
       JSON.stringify({
         status: 'error',

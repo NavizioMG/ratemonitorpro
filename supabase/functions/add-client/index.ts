@@ -6,14 +6,6 @@ const GHL_RMP_API_KEY = Deno.env.get("GHL_RMP_API_KEY") || ""; // For RMP contac
 const GHL_LOCATION_ID = Deno.env.get("RMP_LOCATION_ID") || "";
 const GHL_COMPANY_ID = Deno.env.get("GHL_COMPANY_ID") || "";
 
-// Now we can log them
-console.log("🔧 Environment check:", {
-  hasGHL_RMP_API_KEY: !!GHL_RMP_API_KEY,
-  hasGHL_LOCATION_ID: !!GHL_LOCATION_ID,
-  hasGHL_COMPANY_ID: !!GHL_COMPANY_ID,
-  GHL_LOCATION_ID_preview: GHL_LOCATION_ID.substring(0, 8) + "..."
-});
-
 // ✅ CORS headers
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -22,8 +14,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log("🔧 [add-client] Request received:", req.method);
-
   // ✅ Handle OPTIONS preflight request
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -40,16 +30,7 @@ serve(async (req) => {
   try {
     const { fullName, email, phone, companyName, timezone } = await req.json();
 
-    console.log("🔧 [add-client] Request data:", {
-      fullName,
-      email,
-      phone: phone || "none",
-      companyName,
-      timezone
-    });
-
     if (!fullName || !email) {
-      console.error("🔧 [add-client] Missing required fields");
       return new Response(
         JSON.stringify({ error: "Missing required fields: fullName and email are required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -57,7 +38,6 @@ serve(async (req) => {
     }
 
     if (!GHL_RMP_API_KEY || !GHL_LOCATION_ID) {
-      console.error("🔧 [add-client] Missing GHL environment variables");
       return new Response(
         JSON.stringify({ error: "GHL configuration missing" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -78,13 +58,6 @@ serve(async (req) => {
       }
     };
 
-    console.log("🔧 [add-client] Calling GHL API with:", {
-      locationId: GHL_LOCATION_ID,
-      email,
-      name: fullName,
-      phone: phone || "none"
-    });
-
     const ghlRes = await fetch("https://rest.gohighlevel.com/v1/contacts/", {
       method: "POST",
       headers: {
@@ -97,11 +70,6 @@ serve(async (req) => {
     const data = await ghlRes.json();
 
     if (!ghlRes.ok) {
-      console.error("🔧 [add-client] GHL API error:", {
-        status: ghlRes.status,
-        statusText: ghlRes.statusText,
-        data
-      });
       return new Response(
         JSON.stringify({ 
           error: "GHL API failed", 
@@ -112,12 +80,6 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    console.log("🔧 [add-client] GHL contact created successfully:", {
-      contactId: data.contact?.id || data.id,
-      email,
-      name: fullName
-    });
 
     return new Response(JSON.stringify({ 
       success: true,
@@ -130,7 +92,6 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (err) {
-    console.error("🔧 [add-client] Unexpected error:", err);
     return new Response(JSON.stringify({ 
       error: "Internal Server Error",
       message: err.message 
