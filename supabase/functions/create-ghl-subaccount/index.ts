@@ -1,13 +1,13 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 
-// ✅ Load environment variables using your existing names
-const GHL_API_KEY = Deno.env.get("VITE_GHL_API_KEY") || "";
+// Load environment variables with proper separation
+const GHL_AGENCY_API_KEY = Deno.env.get("GHL_AGENCY_API_KEY") || ""; // For sub-account creation
 const GHL_COMPANY_ID = Deno.env.get("GHL_COMPANY_ID") || "";
 const RMP_LOCATION_ID = Deno.env.get("RMP_LOCATION_ID") || "";
 
 console.log("🔧 [create-subaccount] Environment check:", {
-  hasGHL_API_KEY: !!GHL_API_KEY,
+  hasGHL_AGENCY_API_KEY: !!GHL_AGENCY_API_KEY,
   hasGHL_COMPANY_ID: !!GHL_COMPANY_ID,
   hasRMP_LOCATION_ID: !!RMP_LOCATION_ID
 });
@@ -43,8 +43,8 @@ serve(async (req) => {
       throw new Error('Missing required fields: userId, companyName, email are required');
     }
 
-    if (!GHL_API_KEY || !GHL_COMPANY_ID) {
-      throw new Error('GHL configuration missing');
+    if (!GHL_AGENCY_API_KEY || !GHL_COMPANY_ID) {
+      throw new Error('GHL configuration missing - need GHL_AGENCY_API_KEY and GHL_COMPANY_ID');
     }
 
     // Initialize Supabase client
@@ -63,7 +63,7 @@ serve(async (req) => {
     const locationData = {
       companyId: GHL_COMPANY_ID,
       name: companyName,
-      businessName: companyName,
+      businessName: companyName, // This was missing!
       email: email,
       phone: phone || "",
       firstName: firstName,
@@ -74,35 +74,45 @@ serve(async (req) => {
       postalCode: "80202",
       country: "US",
       timezone: timezone || 'America/Denver',
-      website: "https://example.com",
-      business: {
-        name: companyName,
-        email: email,
-        address: address || "123 Main St",
-        city: "Denver",
-        state: "CO",
-        postalCode: "80202",
-        country: "US",
-        timezone: timezone || 'America/Denver'
-      }
+      website: "https://example.com"
     };
 
     const ghlResponse = await fetch('https://rest.gohighlevel.com/v1/locations/', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${GHL_API_KEY}`,
+        'Authorization': `Bearer ${GHL_AGENCY_API_KEY}`, // Use agency key for sub-account creation
         'Content-Type': 'application/json'
       },
       body: JSON.stringify(locationData)
     });
 
+    console.log('🔧 [create-subaccount] GHL API response status:', ghlResponse.status);
+    console.log('🔧 [create-subaccount] GHL API response headers:', Object.fromEntries(ghlResponse.headers.entries()));
+
     if (!ghlResponse.ok) {
-      const errorData = await ghlResponse.json();
-      console.error('🔧 [create-subaccount] GHL API error:', errorData);
-      throw new Error(`GHL API error: ${JSON.stringify(errorData)}`);
+      const errorText = await ghlResponse.text(); // Get as text first
+      console.error('🔧 [create-subaccount] GHL API error (text):', errorText);
+      
+      let errorData;
+      try {
+        errorData = JSON.parse(errorText);
+      } catch (e) {
+        errorData = { message: errorText };
+      }
+      
+      throw new Error(`GHL API error: ${ghlResponse.status} - ${errorText.substring(0, 200)}`);
     }
 
-    const ghlData = await ghlResponse.json();
+    const ghlDataText = await ghlResponse.text();
+    console.log('🔧 [create-subaccount] GHL API raw response:', ghlDataText.substring(0, 500));
+    
+    let ghlData;
+    try {
+      ghlData = JSON.parse(ghlDataText);
+    } catch (e) {
+      console.error('🔧 [create-subaccount] Failed to parse GHL response as JSON');
+      throw new Error(`Invalid JSON response from GHL: ${ghlDataText.substring(0, 200)}`);
+    }
     console.log('🔧 [create-subaccount] GHL sub-account created:', {
       locationId: ghlData.location?.id,
       hasApiKey: !!ghlData.location?.apiKey

@@ -1,14 +1,14 @@
 // supabase/functions/add-client/index.ts
 import { serve } from "https://deno.land/std@0.131.0/http/server.ts";
 
-// ✅ Load environment variables securely FIRST - using your existing variable names
-const GHL_API_KEY = Deno.env.get("VITE_GHL_API_KEY") || "";
+// Load environment variables with proper separation
+const GHL_RMP_API_KEY = Deno.env.get("GHL_RMP_API_KEY") || ""; // For RMP contact creation
 const GHL_LOCATION_ID = Deno.env.get("RMP_LOCATION_ID") || "";
 const GHL_COMPANY_ID = Deno.env.get("GHL_COMPANY_ID") || "";
 
 // Now we can log them
 console.log("🔧 Environment check:", {
-  hasGHL_API_KEY: !!GHL_API_KEY,
+  hasGHL_RMP_API_KEY: !!GHL_RMP_API_KEY,
   hasGHL_LOCATION_ID: !!GHL_LOCATION_ID,
   hasGHL_COMPANY_ID: !!GHL_COMPANY_ID,
   GHL_LOCATION_ID_preview: GHL_LOCATION_ID.substring(0, 8) + "..."
@@ -56,7 +56,7 @@ serve(async (req) => {
       );
     }
 
-    if (!GHL_API_KEY || !GHL_LOCATION_ID) {
+    if (!GHL_RMP_API_KEY || !GHL_LOCATION_ID) {
       console.error("🔧 [add-client] Missing GHL environment variables");
       return new Response(
         JSON.stringify({ error: "GHL configuration missing" }),
@@ -88,7 +88,7 @@ serve(async (req) => {
     const ghlRes = await fetch("https://rest.gohighlevel.com/v1/contacts/", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${GHL_API_KEY}`,
+        Authorization: `Bearer ${GHL_RMP_API_KEY}`, // Use RMP location key
         "Content-Type": "application/json",
       },
       body: JSON.stringify(contactData),
