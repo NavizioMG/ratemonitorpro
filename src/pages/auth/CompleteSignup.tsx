@@ -20,7 +20,6 @@ export function CompleteSignup() {
     }
   }, [completed, isAuthenticated, authLoading, navigate]);
 
-  // Main signup process - runs only once
   useEffect(() => {
     if (hasRun.current) return;
     hasRun.current = true;
@@ -106,7 +105,7 @@ export function CompleteSignup() {
           type: 'system'
         });
 
-        // Create RMP contact
+        // Create RMP contact and store ID
         try {
           const contactResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/add-client`, {
             method: 'POST',
@@ -131,7 +130,7 @@ export function CompleteSignup() {
             }).eq('id', userId);
           }
         } catch (contactError) {
-          // Non-critical error, don't fail the signup
+          // Non-critical - continue
         }
 
         // Create GHL sub-account
@@ -152,7 +151,15 @@ export function CompleteSignup() {
             }),
           });
         } catch (subaccountError) {
-          // Non-critical error, don't fail the signup
+          // Non-critical - continue
+        }
+
+        // Simple auth check - just verify session exists
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (!currentSession?.user?.id) {
+          throw new Error('Authentication session not established');
         }
 
         localStorage.clear();
@@ -217,38 +224,35 @@ export function CompleteSignup() {
     );
   }
 
-  if (completed) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-primary/10 via-white to-primary/5 flex items-center justify-center px-4">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-10 text-center">
-          <div className="flex justify-center mb-6">
-            <div className="bg-primary text-white rounded-full h-16 w-16 flex items-center justify-center text-2xl font-bold shadow-md">
-              RMP
-            </div>
+  // Show success screen and wait for auth context
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-white to-primary/5 flex items-center justify-center px-4">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-10 text-center">
+        <div className="flex justify-center mb-6">
+          <div className="bg-primary text-white rounded-full h-16 w-16 flex items-center justify-center text-2xl font-bold shadow-md">
+            RMP
           </div>
-          <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">
-            Welcome to <span className="text-primary">Rate Monitor Pro</span>!
-          </h2>
-          <p className="text-gray-600 mb-6">
-            {authLoading || !isAuthenticated 
-              ? 'Setting up your dashboard access...' 
-              : 'Your account is ready. Redirecting to dashboard...'
-            }
-          </p>
-          <div className="flex justify-center">
-            <div className="animate-pulse inline-flex items-center text-sm text-gray-500">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
-              {authLoading || !isAuthenticated ? 'Finalizing...' : 'Redirecting...'}
-            </div>
-          </div>
-          <p className="text-gray-400 text-xs mt-6">
-            Almost there…
-          </p>
         </div>
+        <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold text-gray-900 mb-3">
+          Welcome to <span className="text-primary">Rate Monitor Pro</span>!
+        </h2>
+        <p className="text-gray-600 mb-6">
+          {authLoading || !isAuthenticated 
+            ? 'Setting up your dashboard access...' 
+            : 'Your account is ready. Redirecting to dashboard...'
+          }
+        </p>
+        <div className="flex justify-center">
+          <div className="animate-pulse inline-flex items-center text-sm text-gray-500">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
+            {authLoading || !isAuthenticated ? 'Finalizing...' : 'Redirecting...'}
+          </div>
+        </div>
+        <p className="text-gray-400 text-xs mt-6">
+          Almost there…
+        </p>
       </div>
-    );
-  }
-
-  return null;
+    </div>
+  );
 }
