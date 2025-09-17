@@ -13,11 +13,15 @@ export function CompleteSignup() {
   const hasRun = useRef(false);
   const { session, loading: authLoading, isAuthenticated } = useAuth();
 
-  // Remove the AuthContext-dependent redirect logic
-  // The direct redirect is now handled in the signup function
+  // Redirect when auth is ready (give it more time)
+  useEffect(() => {
+    if (completed && isAuthenticated && !authLoading) {
+      setTimeout(() => navigate('/dashboard', { replace: true }), 500);
+    }
+  }, [completed, isAuthenticated, authLoading, navigate]);
 
   useEffect(() => {
-    if (hasRun.current) return;
+    if (completed || hasRun.current) return;
     hasRun.current = true;
 
     const completeSignup = async () => {
@@ -126,7 +130,7 @@ export function CompleteSignup() {
             }).eq('id', userId);
           }
         } catch (contactError) {
-          // Non-critical - continue
+          // Non-critical
         }
 
         // Create GHL sub-account
@@ -147,23 +151,24 @@ export function CompleteSignup() {
             }),
           });
         } catch (subaccountError) {
-          // Non-critical - continue
+          // Non-critical
         }
 
-        // Simple auth check - verify session exists and redirect
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Wait longer for auth context to sync
+        let attempts = 0;
+        const maxAttempts = 10; // 5 seconds
         
-        const { data: { session: currentSession } } = await supabase.auth.getSession();
-        if (!currentSession?.user?.id) {
-          throw new Error('Authentication session not established');
+        while (attempts < maxAttempts) {
+          if (session?.user?.id === userId) {
+            break;
+          }
+          await new Promise(resolve => setTimeout(resolve, 500));
+          attempts++;
         }
 
         localStorage.clear();
         setCompleted(true);
         setLoading(false);
-        
-        // Direct redirect - don't wait for AuthContext
-        setTimeout(() => navigate('/dashboard', { replace: true }), 1000);
 
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to complete signup');
@@ -172,7 +177,7 @@ export function CompleteSignup() {
     };
 
     completeSignup();
-  }, [searchParams]);
+  }, [searchParams, completed, session]);
 
   if (loading) {
     return (
@@ -223,32 +228,38 @@ export function CompleteSignup() {
     );
   }
 
-  // Show success screen and wait for auth context
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/10 via-white to-primary/5 flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-10 text-center">
-        <div className="flex justify-center mb-6">
-          <div className="bg-primary text-white rounded-full h-16 w-16 flex items-center justify-center text-2xl font-bold shadow-md">
-            RMP
+  if (completed) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-primary/10 via-white to-primary/5 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-10 text-center">
+          <div className="flex justify-center mb-6">
+            <div className="bg-primary text-white rounded-full h-16 w-16 flex items-center justify-center text-2xl font-bold shadow-md">
+              RMP
+            </div>
           </div>
-        </div>
-        <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900 mb-3">
-          Welcome to <span className="text-primary">Rate Monitor Pro</span>!
-        </h2>
-        <p className="text-gray-600 mb-6">
-          Your account is ready. Redirecting to dashboard...
-        </p>
-        <div className="flex justify-center">
-          <div className="animate-pulse inline-flex items-center text-sm text-gray-500">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
-            Redirecting...
+          <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            Welcome to <span className="text-primary">Rate Monitor Pro</span>!
+          </h2>
+          <p className="text-gray-600 mb-6">
+            {authLoading || !isAuthenticated 
+              ? 'Setting up your dashboard access...' 
+              : 'Your account is ready. Redirecting to dashboard...'
+            }
+          </p>
+          <div className="flex justify-center">
+            <div className="animate-pulse inline-flex items-center text-sm text-gray-500">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
+              {authLoading || !isAuthenticated ? 'Finalizing...' : 'Redirecting...'}
+            </div>
           </div>
+          <p className="text-gray-400 text-xs mt-6">
+            Almost there…
+          </p>
         </div>
-        <p className="text-gray-400 text-xs mt-6">
-          Almost there…
-        </p>
       </div>
-    </div>
-  );
+    );
+  }
+
+  return null;
 }
