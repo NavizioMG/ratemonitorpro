@@ -1,8 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7';
 import Stripe from 'https://esm.sh/stripe@12.18.0';
-import { createGHLLocation } from '../utils/ghl.ts';
-import { debug } from './utils/debug.ts';
 
 const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
   apiVersion: '2023-10-16',
@@ -17,10 +15,11 @@ serve(async (req) => {
   }
 
   try {
-    debug.logInfo('Processing Stripe webhook', { type: event.type });
-
     const body = await req.text();
     const event = stripe.webhooks.constructEvent(body, signature, endpointSecret);
+    
+    console.log('Processing Stripe webhook', { type: event.type });
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -29,7 +28,7 @@ serve(async (req) => {
     switch (event.type) {
       case 'customer.subscription.created':
       case 'customer.subscription.updated': {
-        debug.logInfo('Processing subscription event', { type: event.type });
+        console.log('Processing subscription event', { type: event.type });
 
         const subscription = event.data.object;
         const userId = subscription.metadata.user_id;
@@ -39,30 +38,8 @@ serve(async (req) => {
           throw new Error('No user_id in subscription metadata');
         }
 
-        // Create GHL location
-        try {
-          const ghlLocation = await createGHLLocation({
-            userId,
-            companyName,
-            email: subscription.customer_email
-          });
-
-          // Update profile with GHL location ID
-          const { error: updateError } = await supabase
-            .from('profiles')
-            .update({ ghl_location_id: ghlLocation.id })
-            .eq('id', userId);
-
-          if (updateError) {
-            debug.logError('Error updating profile with GHL location', { error: updateError });
-            throw updateError;
-          }
-
-          debug.logInfo('GHL location created successfully', { locationId: ghlLocation.id });
-        } catch (ghlError) {
-          debug.logError('Error creating GHL location', { error: ghlError });
-          // Don't throw - we want to continue with subscription setup even if GHL fails
-        }
+        // Note: GHL integration removed from webhook for now
+        // GHL integration is handled in the frontend signup flow
 
         // Ensure profile exists
         const { data: profile, error: profileError } = await supabase
@@ -82,7 +59,7 @@ serve(async (req) => {
             });
 
           if (createProfileError) {
-            debug.logError('Error creating profile', { error: createProfileError });
+            console.error('Error creating profile', { error: createProfileError });
             throw createProfileError;
           }
         }
@@ -101,7 +78,7 @@ serve(async (req) => {
           });
 
         if (error) {
-          debug.logError('Error updating subscription', { error });
+          console.error('Error updating subscription', { error });
           throw error;
         }
 
@@ -119,7 +96,7 @@ serve(async (req) => {
       }
 
       case 'customer.subscription.deleted': {
-        debug.logInfo('Processing subscription deletion');
+        console.log('Processing subscription deletion');
 
         const subscription = event.data.object;
         const userId = subscription.metadata.user_id;
@@ -136,7 +113,7 @@ serve(async (req) => {
           .eq('user_id', userId);
 
         if (error) {
-          debug.logError('Error updating subscription status', { error });
+          console.error('Error updating subscription status', { error });
           throw error;
         }
 
@@ -154,7 +131,7 @@ serve(async (req) => {
       }
 
       case 'invoice.payment_succeeded': {
-        debug.logInfo('Processing successful payment');
+        console.log('Processing successful payment');
 
         const invoice = event.data.object;
         const userId = invoice.subscription?.metadata?.user_id;
@@ -175,7 +152,7 @@ serve(async (req) => {
           });
 
         if (error) {
-          debug.logError('Error recording payment', { error });
+          console.error('Error recording payment', { error });
           throw error;
         }
 
@@ -193,7 +170,7 @@ serve(async (req) => {
       }
 
       case 'invoice.payment_failed': {
-        debug.logInfo('Processing failed payment');
+        console.log('Processing failed payment');
 
         const invoice = event.data.object;
         const userId = invoice.subscription?.metadata?.user_id;
@@ -213,7 +190,7 @@ serve(async (req) => {
           });
 
         if (error) {
-          debug.logError('Error recording failed payment', { error });
+          console.error('Error recording failed payment', { error });
           throw error;
         }
 
@@ -233,6 +210,7 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({ received: true }), { status: 200 });
   } catch (err) {
+    console.error('Webhook Error:', err);
     return new Response(
       `Webhook Error: ${err.message}`,
       { status: 400 }
