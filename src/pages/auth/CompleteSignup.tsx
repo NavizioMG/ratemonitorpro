@@ -7,6 +7,7 @@ import { supabase } from '../../lib/supabase';
 const COMPONENT_ID = 'CompleteSignup';
 
 export function CompleteSignup() {
+  console.log('🚨 CompleteSignup component loaded!'); // Add this line
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
