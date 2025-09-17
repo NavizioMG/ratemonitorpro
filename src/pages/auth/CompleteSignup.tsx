@@ -116,10 +116,10 @@ export function CompleteSignup() {
           type: 'system'
         });
 
-        // 🔧 NEW: Add GHL integration via Supabase Edge Function
-        console.log('🔧 Creating GHL contact via Edge Function');
+        // 🔧 Step 1: Create contact in RMP sub-account for tracking
+        console.log('🔧 Creating contact in RMP sub-account');
         try {
-          const ghlResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/add-client`, {
+          const contactResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/add-client`, {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
@@ -134,17 +134,43 @@ export function CompleteSignup() {
             }),
           });
 
-          const ghlResult = await ghlResponse.json();
-
-          if (!ghlResponse.ok) {
-            console.error('🔧 GHL integration failed:', ghlResult);
-            // Don't throw error - let signup continue even if GHL fails
+          const contactResult = await contactResponse.json();
+          if (contactResponse.ok) {
+            console.log('🔧 RMP contact created successfully:', contactResult);
           } else {
-            console.log('🔧 GHL contact created successfully:', ghlResult);
+            console.error('🔧 RMP contact creation failed:', contactResult);
           }
-        } catch (ghlError) {
-          console.error('🔧 GHL integration error:', ghlError);
-          // Don't throw error - let signup continue even if GHL fails
+        } catch (contactError) {
+          console.error('🔧 RMP contact creation error:', contactError);
+        }
+
+        // 🔧 Step 2: Create GHL sub-account for the user
+        console.log('🔧 Creating GHL sub-account for user');
+        try {
+          const subaccountResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-ghl-subaccount`, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({
+              userId,
+              fullName,
+              email: fixedEmail,
+              phone,
+              companyName,
+              timezone
+            }),
+          });
+
+          const subaccountResult = await subaccountResponse.json();
+          if (subaccountResponse.ok) {
+            console.log('🔧 GHL sub-account created successfully:', subaccountResult);
+          } else {
+            console.error('🔧 GHL sub-account creation failed:', subaccountResult);
+          }
+        } catch (subaccountError) {
+          console.error('🔧 GHL sub-account creation error:', subaccountError);
         }
 
         // 🔧 DEBUG: Check auth state before redirect
