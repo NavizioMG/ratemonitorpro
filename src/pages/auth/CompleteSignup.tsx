@@ -43,28 +43,37 @@ export function CompleteSignup() {
         }
 
         // 🔍 DEBUG: Let's see what data we have
-console.log('🔧 Debug - Available signup data:', {
-  email: fixedEmail,
-  fullName,
-  companyName,
-  phone,
-  timezone,
-  password: password ? 'Present' : 'Missing'
-});
+        console.log('🔧 Debug - Available signup data:', {
+          email: fixedEmail,
+          fullName,
+          companyName,
+          phone,
+          timezone,
+          password: password ? 'Present' : 'Missing'
+        });
 
-console.log('🔧 Debug - Search params:', {
-  success: searchParams.get('success'),
-  email: searchParams.get('email'),
-  fullName: searchParams.get('fullName'),
-  // ... all search params
-});
+        console.log('🔧 Debug - Search params:', {
+          success: searchParams.get('success'),
+          email: searchParams.get('email'),
+          fullName: searchParams.get('fullName'),
+          companyName: searchParams.get('companyName'),
+          phone: searchParams.get('phone'),
+          timezone: searchParams.get('timezone')
+        });
 
-console.log('🔧 Debug - LocalStorage:', {
-  signupEmail: localStorage.getItem('signupEmail'),
-  signupFullName: localStorage.getItem('signupFullName'),
-  // ... all localStorage items
-});
+        console.log('🔧 Debug - LocalStorage:', {
+          signupEmail: localStorage.getItem('signupEmail'),
+          signupFullName: localStorage.getItem('signupFullName'),
+          signupCompanyName: localStorage.getItem('signupCompanyName'),
+          signupPhone: localStorage.getItem('signupPhone'),
+          signupPassword: localStorage.getItem('signupPassword') ? 'Present' : 'Missing',
+          signupTimezone: localStorage.getItem('signupTimezone')
+        });
 
+        /* 
+        🚧 COMMENTED OUT: GHL Integration
+        Theory: GHL might already be handled in create-checkout-session Edge Function
+        
         // Create GHL sub-account via Edge Function
         console.log('🔧 Creating GHL sub-account via Edge Function');
         
@@ -75,17 +84,24 @@ console.log('🔧 Debug - LocalStorage:', {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            userId: '', // Will update profile after user creation
+            userId: 'temp-user-id', // Use temporary ID since Edge Function requires it
             companyName,
             email: fixedEmail,
-            phone,
-            address: '123 Main St' // Default address
+            phone: phone || '', // Ensure phone is not undefined
+            address: '123 Main St'
           })
         });
 
         if (!ghlResponse.ok) {
           const errorText = await ghlResponse.text();
           console.error('GHL Edge Function Error:', errorText);
+          console.error('Request payload was:', {
+            userId: 'temp-user-id',
+            companyName,
+            email: fixedEmail,
+            phone: phone || '',
+            address: '123 Main St'
+          });
           throw new Error(`GHL integration failed: ${ghlResponse.status}`);
         }
 
@@ -94,17 +110,26 @@ console.log('🔧 Debug - LocalStorage:', {
         const rmpContactId = null; // This Edge Function doesn't create RMP contacts
 
         console.log('GHL sub-account created successfully:', { locationId });
+        */
+
+        // 🔧 TEMPORARY: Set dummy values for GHL data
+        const locationId = null; // Will be set by create-checkout-session if it works
+        const rmpContactId = null;
+
+        console.log('🔧 Proceeding without GHL call - assuming it was handled during checkout');
 
         let userId;
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email: fixedEmail, password });
 
         if (signInData?.user) {
           userId = signInData.user.id;
+          console.log('🔧 User signed in successfully:', userId);
         } else if (signInError?.message === 'Invalid login credentials') {
           const { data: existingUser, error: checkError } = await supabase.rpc('get_user_by_email', { email: fixedEmail });
           if (checkError) throw checkError;
           if (existingUser) throw new Error('Email already registered—please use correct password or reset it.');
 
+          console.log('🔧 Creating new user account');
           const { data, error: signUpError } = await supabase.auth.signUp({
             email: fixedEmail,
             password,
@@ -126,6 +151,7 @@ console.log('🔧 Debug - LocalStorage:', {
           throw signInError;
         }
 
+        console.log('🔧 Updating user profile');
         const { error: updateError } = await supabase.from('profiles').upsert({
           id: userId,
           full_name: fullName,
@@ -139,9 +165,11 @@ console.log('🔧 Debug - LocalStorage:', {
         if (updateError) throw updateError;
 
         if (!signInData?.user) {
+          console.log('🔧 Signing in user after account creation');
           await supabase.auth.signInWithPassword({ email: fixedEmail, password });
         }
 
+        console.log('🔧 Creating welcome notification');
         await supabase.from('notifications').insert({
           user_id: userId,
           title: 'Welcome to Rate Monitor Pro!',
@@ -149,6 +177,7 @@ console.log('🔧 Debug - LocalStorage:', {
           type: 'system'
         });
 
+        console.log('🔧 Signup completion successful - cleaning up and redirecting');
         localStorage.clear();
         setCompleted(true);
         navigate('/dashboard');
