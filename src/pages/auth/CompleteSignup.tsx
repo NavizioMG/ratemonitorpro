@@ -42,7 +42,6 @@ export function CompleteSignup() {
           throw new Error(`Invalid email format: ${fixedEmail}`);
         }
 
-        // 🔍 DEBUG: Let's see what data we have
         console.log('🔧 Debug - Available signup data:', {
           email: fixedEmail,
           fullName,
@@ -52,85 +51,23 @@ export function CompleteSignup() {
           password: password ? 'Present' : 'Missing'
         });
 
-        console.log('🔧 Debug - Search params:', {
-          success: searchParams.get('success'),
-          email: searchParams.get('email'),
-          fullName: searchParams.get('fullName'),
-          companyName: searchParams.get('companyName'),
-          phone: searchParams.get('phone'),
-          timezone: searchParams.get('timezone')
+        // Try to sign in first (user might already exist from Stripe webhook)
+        console.log('🔧 Attempting to sign in existing user');
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ 
+          email: fixedEmail, 
+          password 
         });
-
-        console.log('🔧 Debug - LocalStorage:', {
-          signupEmail: localStorage.getItem('signupEmail'),
-          signupFullName: localStorage.getItem('signupFullName'),
-          signupCompanyName: localStorage.getItem('signupCompanyName'),
-          signupPhone: localStorage.getItem('signupPhone'),
-          signupPassword: localStorage.getItem('signupPassword') ? 'Present' : 'Missing',
-          signupTimezone: localStorage.getItem('signupTimezone')
-        });
-
-        /* 
-        🚧 COMMENTED OUT: GHL Integration
-        Theory: GHL might already be handled in create-checkout-session Edge Function
-        
-        // Create GHL sub-account via Edge Function
-        console.log('🔧 Creating GHL sub-account via Edge Function');
-        
-        const ghlResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-ghl-subaccount`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            userId: 'temp-user-id', // Use temporary ID since Edge Function requires it
-            companyName,
-            email: fixedEmail,
-            phone: phone || '', // Ensure phone is not undefined
-            address: '123 Main St'
-          })
-        });
-
-        if (!ghlResponse.ok) {
-          const errorText = await ghlResponse.text();
-          console.error('GHL Edge Function Error:', errorText);
-          console.error('Request payload was:', {
-            userId: 'temp-user-id',
-            companyName,
-            email: fixedEmail,
-            phone: phone || '',
-            address: '123 Main St'
-          });
-          throw new Error(`GHL integration failed: ${ghlResponse.status}`);
-        }
-
-        const ghlResult = await ghlResponse.json();
-        const locationId = ghlResult.ghlData?.locationId;
-        const rmpContactId = null; // This Edge Function doesn't create RMP contacts
-
-        console.log('GHL sub-account created successfully:', { locationId });
-        */
-
-        // 🔧 TEMPORARY: Set dummy values for GHL data
-        const locationId = null; // Will be set by create-checkout-session if it works
-        const rmpContactId = null;
-
-        console.log('🔧 Proceeding without GHL call - assuming it was handled during checkout');
 
         let userId;
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email: fixedEmail, password });
 
         if (signInData?.user) {
+          // User already exists and signed in successfully
           userId = signInData.user.id;
           console.log('🔧 User signed in successfully:', userId);
         } else if (signInError?.message === 'Invalid login credentials') {
-          const { data: existingUser, error: checkError } = await supabase.rpc('get_user_by_email', { email: fixedEmail });
-          if (checkError) throw checkError;
-          if (existingUser) throw new Error('Email already registered—please use correct password or reset it.');
-
+          // User doesn't exist, create new account
           console.log('🔧 Creating new user account');
-          const { data, error: signUpError } = await supabase.auth.signUp({
+          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
             email: fixedEmail,
             password,
             options: {
@@ -138,16 +75,25 @@ export function CompleteSignup() {
                 full_name: fullName,
                 company_name: companyName,
                 phone,
-                timezone,
-                ghl_location_id: locationId,
-                ghl_rmp_contact_id: rmpContactId
+                timezone
               }
             }
           });
+
           if (signUpError) throw signUpError;
-          userId = data.user?.id;
+          
+          userId = signUpData.user?.id;
           if (!userId) throw new Error('User ID not found after signup');
+
+          // Sign in the newly created user
+          console.log('🔧 Signing in newly created user');
+          const { error: newSignInError } = await supabase.auth.signInWithPassword({ 
+            email: fixedEmail, 
+            password 
+          });
+          if (newSignInError) throw newSignInError;
         } else {
+          // Some other error occurred
           throw signInError;
         }
 
@@ -157,17 +103,10 @@ export function CompleteSignup() {
           full_name: fullName,
           company_name: companyName,
           phone,
-          timezone,
-          ghl_location_id: locationId,
-          ghl_rmp_contact_id: rmpContactId
+          timezone
         }, { onConflict: 'id' });
 
         if (updateError) throw updateError;
-
-        if (!signInData?.user) {
-          console.log('🔧 Signing in user after account creation');
-          await supabase.auth.signInWithPassword({ email: fixedEmail, password });
-        }
 
         console.log('🔧 Creating welcome notification');
         await supabase.from('notifications').insert({
