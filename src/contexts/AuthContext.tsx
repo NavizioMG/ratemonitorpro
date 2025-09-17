@@ -35,6 +35,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     userData?: { fullName?: string; companyName?: string; phone?: string; email?: string }
   ) => {
     try {
+      // 🔧 FIX: Prevent simultaneous profile creation across tabs
+      const creatingKey = `creating_profile_${userId}`;
+      if (localStorage.getItem(creatingKey)) {
+        debug.logInfo(Category.AUTH, 'Another tab is creating profile, waiting', { userId, tabId }, COMPONENT_ID);
+        
+        // Wait up to 5 seconds for other tab to finish
+        for (let i = 0; i < 50; i++) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          if (!localStorage.getItem(creatingKey)) break;
+        }
+        
+        // Try to get the profile that should now exist
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+        
+        if (profile) return profile;
+      }
+
       // Wait a short time to ensure auth user is fully created
       await new Promise(resolve => setTimeout(resolve, 1000));
   
@@ -45,57 +66,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
   
       if (!existingProfile && userData) {
-        debug.logInfo(Category.AUTH, 'Creating new profile', { userId, tabId }, COMPONENT_ID);
-  
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .insert([{
-            id: userId,
-            full_name: userData.fullName || '',
-            company_name: userData.companyName || '',
-            phone: userData.phone || null,
-          }])
-          .select()
-          .single();
-  
-        if (profileError) throw profileError;
-  
-        // ✅ SAFER: Use email from userData, fallback to session
-        const email = userData.email || session?.user?.email;
-  
-        // Call secure Netlify backend function to create GHL contact
+        // Mark that we're creating the profile
+        localStorage.setItem(creatingKey, 'true');
+        
         try {
-          debug.logInfo(Category.AUTH, 'Creating GHL sub-account via Netlify function', {
-            fullName: userData.fullName,
-            email,
-            phone: userData.phone,
-            companyName: userData.companyName,
-            tabId
-          }, COMPONENT_ID);
+          debug.logInfo(Category.AUTH, 'Creating new profile', { userId, tabId }, COMPONENT_ID);
   
-          const response = await fetch('/.netlify/functions/add-client', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .insert([{
+              id: userId,
+              full_name: userData.fullName || '',
+              company_name: userData.companyName || '',
+              phone: userData.phone || null,
+            }])
+            .select()
+            .single();
+  
+          if (profileError) throw profileError;
+  
+          // ✅ SAFER: Use email from userData, fallback to session
+          const email = userData.email || session?.user?.email;
+  
+          // Call secure Netlify backend function to create GHL contact
+          try {
+            debug.logInfo(Category.AUTH, 'Creating GHL sub-account via Netlify function', {
               fullName: userData.fullName,
               email,
               phone: userData.phone,
               companyName: userData.companyName,
-            }),
-          });
+              tabId
+            }, COMPONENT_ID);
   
-          const result = await response.json();
+            const response = await fetch('/.netlify/functions/add-client', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                fullName: userData.fullName,
+                email,
+                phone: userData.phone,
+                companyName: userData.companyName,
+              }),
+            });
   
-          if (!response.ok) {
-            debug.logError(Category.API, 'GHL backend function failed', { result, tabId }, null, COMPONENT_ID);
-          } else {
-            debug.logInfo(Category.API, 'GHL contact created successfully via backend', { result, tabId }, COMPONENT_ID);
+            const result = await response.json();
+  
+            if (!response.ok) {
+              debug.logError(Category.API, 'GHL backend function failed', { result, tabId }, null, COMPONENT_ID);
+            } else {
+              debug.logInfo(Category.API, 'GHL contact created successfully via backend', { result, tabId }, COMPONENT_ID);
+            }
+          } catch (error) {
+            debug.logError(Category.AUTH, 'Failed to call backend GHL function', { error, tabId }, error, COMPONENT_ID);
           }
-        } catch (error) {
-          debug.logError(Category.AUTH, 'Failed to call backend GHL function', { error, tabId }, error, COMPONENT_ID);
-        }
   
-        return profile;
+          return profile;
+        } finally {
+          // Always clear the creating flag
+          localStorage.removeItem(creatingKey);
+        }
       }
   
       return existingProfile;
@@ -288,37 +317,85 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
     }
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, authSession) => {
       debug.logInfo(Category.AUTH, 'Auth state change', { 
         event, 
         userId: authSession?.user?.id,
-        tabId
+        tabId,
+        isMainTab
       }, COMPONENT_ID);
-
+    
       if (!mounted) return;
-
+    
+      // 🔧 FIX: Only let the main tab handle most auth state changes
+      const currentMainTab = localStorage.getItem('active_auth_tab');
+      const isCurrentMainTab = currentMainTab === tabId;
+    
+      // 🔧 FIX: Handle SIGNED_OUT in all tabs (important for security)
+      if (event === 'SIGNED_OUT') {
+        debug.logInfo(Category.AUTH, 'Sign out detected, clearing session in all tabs', { tabId }, COMPONENT_ID);
+        setSession(null);
+        if (refreshIntervalRef.current && isCurrentMainTab) {
+          clearInterval(refreshIntervalRef.current);
+        }
+        setLoading(false);
+        return;
+      }
+    
+      // 🔧 FIX: Let non-main tabs handle INITIAL_SESSION to get existing state
+      if (event === 'INITIAL_SESSION' && !isCurrentMainTab && authSession?.user) {
+        debug.logInfo(Category.AUTH, 'Initial session in secondary tab, syncing state', { tabId }, COMPONENT_ID);
+        
+        try {
+          // Just fetch existing profile - don't create anything
+          const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', authSession.user.id)
+            .maybeSingle();
+          
+          setSession({
+            user: {
+              id: authSession.user.id,
+              email: authSession.user.email!,
+            },
+            profile: existingProfile || null,
+          });
+        } catch (error) {
+          debug.logError(Category.AUTH, 'Error syncing initial session in secondary tab', { tabId }, error, COMPONENT_ID);
+        }
+        
+        setLoading(false);
+        return;
+      }
+    
+      // 🔧 FIX: Only main tab handles active auth events (SIGNED_IN, TOKEN_REFRESHED, etc.)
+      if (!isCurrentMainTab && event !== 'INITIAL_SESSION') {
+        debug.logInfo(Category.AUTH, 'Ignoring auth event in secondary tab', { 
+          event, 
+          tabId, 
+          mainTab: currentMainTab 
+        }, COMPONENT_ID);
+        return;
+      }
+    
       // Only set loading to true for initial load or explicit auth actions
       if (!initialLoadComplete && event !== 'INITIAL_SESSION') {
         setLoading(true);
       }
-
+    
       if (!authSession) {
         setSession(null);
-        if (refreshIntervalRef.current && isMainTab) {
+        if (refreshIntervalRef.current && isCurrentMainTab) {
           clearInterval(refreshIntervalRef.current);
-        }
-        // Don't set loading to false immediately for sign out
-        if (event === 'SIGNED_OUT') {
-          setLoading(false);
         }
         return;
       }
-
+    
       try {
         // Only ensure profile on main tab or for explicit auth events
         let profile = null;
-        if (isMainTab || event === 'SIGNED_IN' || event === 'SIGNED_UP') {
+        if (isCurrentMainTab || event === 'SIGNED_IN' || event === 'SIGNED_UP') {
           profile = await ensureProfile(authSession.user.id);
         } else {
           // Secondary tabs just fetch existing profile
@@ -329,9 +406,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             .maybeSingle();
           profile = existingProfile;
         }
-
+    
         if (!mounted) return;
-
+    
         setSession({
           user: {
             id: authSession.user.id,
@@ -339,9 +416,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
           profile: profile || null,
         });
-
+    
         // Setup token refresh for new/refreshed sessions (main tab only)
-        if (isMainTab && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
+        if (isCurrentMainTab && (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')) {
           setupTokenRefresh(authSession);
         }
       } catch (error) {
@@ -382,21 +459,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []); // Empty dependency array
 
-  // Multi-tab synchronization effect
+  // 🔧 FIXED: Multi-tab synchronization effect with debouncing
+  
   useEffect(() => {
     // Add random delay to prevent all tabs from making requests simultaneously
     const tabDelay = Math.random() * 1000; // 0-1 second random delay
     
     const delayedSetup = setTimeout(() => {
+      let storageDebounceTimer: NodeJS.Timeout | null = null;
       
-      // Listen for storage events (token changes in other tabs)
+      // 🔧 FIX: Debounced storage event handler
       const handleStorageChange = async (e: StorageEvent) => {
-        // Supabase uses localStorage for session storage
-        if (e.key?.includes('supabase.auth.token') || e.key === 'supabase.auth.token') {
-          debug.logInfo(Category.AUTH, 'Token changed in another tab, refreshing session', { tabId }, COMPONENT_ID);
+        // Clear previous timer
+        if (storageDebounceTimer) {
+          clearTimeout(storageDebounceTimer);
+        }
+        
+        // Only handle auth-related storage changes
+        if (!e.key?.includes('supabase.auth.token')) {
+          return;
+        }
+        
+        // Debounce to prevent multiple rapid updates
+        storageDebounceTimer = setTimeout(async () => {
+          debug.logInfo(Category.AUTH, 'Token changed in another tab (debounced)', { tabId }, COMPONENT_ID);
           
           // Add small delay to prevent race conditions
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await new Promise(resolve => setTimeout(resolve, 300));
           
           try {
             const { data: { session }, error } = await supabase.auth.getSession();
@@ -409,7 +498,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (!mountedRef.current) return;
 
             if (session?.user) {
-              // Just fetch existing profile for tab sync
+              // Just fetch existing profile for tab sync - don't create
               const { data: existingProfile } = await supabase
                 .from('profiles')
                 .select('*')
@@ -438,23 +527,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           } catch (error) {
             debug.logError(Category.AUTH, 'Error handling storage change', { tabId }, error, COMPONENT_ID);
           }
-        }
+        }, 500); // 500ms debounce
       };
 
-      // Listen for focus events (tab becomes active)
+      // 🔧 FIX: Simplified focus handler to reduce conflicts
       const handleFocus = async () => {
+        // Only do light checks on focus to prevent conflicts
         if (!session) return;
         
-        debug.logInfo(Category.AUTH, 'Tab focused, checking session validity', { tabId }, COMPONENT_ID);
+        debug.logInfo(Category.AUTH, 'Tab focused - light session check', { tabId }, COMPONENT_ID);
         
-        // Add small delay to prevent immediate API calls when switching tabs
-        await new Promise(resolve => setTimeout(resolve, 100));
-        
+        // Just verify the session exists, don't refresh it
         try {
           const { data: { session: currentSession }, error } = await supabase.auth.getSession();
           
           if (error || !currentSession) {
-            debug.logWarning(Category.AUTH, 'Session invalid on focus, signing out', { tabId }, COMPONENT_ID);
+            debug.logWarning(Category.AUTH, 'Session invalid on focus, clearing state', { tabId }, COMPONENT_ID);
             setSession(null);
             if (refreshIntervalRef.current) {
               clearInterval(refreshIntervalRef.current);
@@ -462,8 +550,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return;
           }
 
-          // Check if token is different (updated in another tab)
-          if (currentSession.access_token !== session.user.id) {
+          // 🔧 FIX: Correct session comparison
+          if (!session || currentSession.user.id !== session.user.id) {
             debug.logInfo(Category.AUTH, 'Session updated in another tab, refreshing', { tabId }, COMPONENT_ID);
             
             // Just fetch existing profile for tab sync
@@ -496,6 +584,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       window.addEventListener('focus', handleFocus);
 
       return () => {
+        if (storageDebounceTimer) {
+          clearTimeout(storageDebounceTimer);
+        }
         window.removeEventListener('storage', handleStorageChange);
         window.removeEventListener('focus', handleFocus);
       };
