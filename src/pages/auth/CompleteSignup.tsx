@@ -36,7 +36,7 @@ export function CompleteSignup() {
       // Small delay to ensure everything is settled
       setTimeout(() => {
         navigate('/dashboard', { replace: true });
-      }, 1000);
+      }, 500);
     }
   }, [completed, isAuthenticated, authLoading, navigate]);
 
@@ -203,7 +203,7 @@ export function CompleteSignup() {
         console.log('Waiting for auth context to sync...');
         
         let attempts = 0;
-        const maxAttempts = 30; // Wait up to 15 seconds
+        const maxAttempts = 6; // Wait up to 3 seconds
         
         while (attempts < maxAttempts) {
           // Check if auth context has the session
@@ -242,7 +242,7 @@ export function CompleteSignup() {
     };
 
     completeSignup();
-  }, [searchParams, completed, session]);
+  }, [searchParams]); // Remove session from dependencies to prevent loops
 
   if (loading) {
     return (
