@@ -15,10 +15,23 @@ export function CompleteSignup() {
 
   // Redirect when auth is ready
   useEffect(() => {
+    // Debug: Log what auth context sees
+    console.log('Auth Debug:', { 
+      completed, 
+      isAuthenticated, 
+      authLoading, 
+      hasSession: !!session,
+      userId: session?.user?.id 
+    });
+    
     if (completed && isAuthenticated && !authLoading) {
       setTimeout(() => navigate('/dashboard', { replace: true }), 500);
+    } else if (completed && session?.user?.id && !authLoading) {
+      // Fallback: if we have a session but isAuthenticated is false, still redirect
+      console.log('Fallback redirect - session exists but isAuthenticated is false');
+      setTimeout(() => navigate('/dashboard', { replace: true }), 500);
     }
-  }, [completed, isAuthenticated, authLoading, navigate]);
+  }, [completed, isAuthenticated, authLoading, navigate, session]);
 
   useEffect(() => {
     if (hasRun.current) return;
