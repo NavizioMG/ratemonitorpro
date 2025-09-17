@@ -184,35 +184,47 @@ export function CompleteSignup() {
           console.error('🔧 GHL sub-account creation error:', subaccountError);
         }
 
-        // 🔧 DEBUG: Check auth state before redirect
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        console.log('🔧 Auth state before redirect:', {
-          hasSession: !!session,
-          userId: session?.user?.id,
-          email: session?.user?.email,
-          error: sessionError
-        });
-
-        // Also check if profile was created
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userId)
-          .single();
+        // 🔧 CRITICAL: Wait for auth state to stabilize before redirect
+        console.log('🔧 Waiting for auth state to stabilize...');
         
-        console.log('🔧 Profile check:', {
-          hasProfile: !!profile,
-          profile,
-          profileError
-        });
+        // Wait a moment for auth to settle
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        // Verify authentication state is solid
+        let attempts = 0;
+        let sessionVerified = false;
+        
+        while (attempts < 10 && !sessionVerified) {
+          const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+          
+          if (session?.user?.id && !sessionError) {
+            console.log('🔧 Session verified:', {
+              userId: session.user.id,
+              email: session.user.email,
+              attempt: attempts + 1
+            });
+            sessionVerified = true;
+          } else {
+            console.log('🔧 Session not ready, waiting... Attempt:', attempts + 1);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            attempts++;
+          }
+        }
+
+        if (!sessionVerified) {
+          throw new Error('Authentication session could not be established');
+        }
 
         console.log('🔧 Signup completion successful - cleaning up and redirecting');
         localStorage.clear();
         setCompleted(true);
+        setLoading(false);
         
-        // 🔧 IMMEDIATE REDIRECT: Don't wait for auth state
-        console.log('🔧 Attempting immediate navigation to dashboard...');
-        window.location.replace('/dashboard'); // Force immediate redirect
+        // 🔧 SHORT DELAY: Let the UI update, then redirect
+        setTimeout(() => {
+          console.log('🔧 Navigating to dashboard...');
+          navigate('/dashboard', { replace: true });
+        }, 2000);
 
       } catch (err) {
         console.error('Signup error:', err.message);
@@ -233,6 +245,9 @@ export function CompleteSignup() {
           <h2 className="mt-4 text-xl font-semibold text-gray-900">
             Completing your registration...
           </h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Setting up your account and dashboard access
+          </p>
         </div>
       </div>
     );
@@ -256,19 +271,23 @@ export function CompleteSignup() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
-      <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-        <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
-        <h2 className="mt-4 text-xl font-semibold text-gray-900">Welcome to Rate Monitor Pro!</h2>
-        <p className="mt-2 text-gray-600">Your account is ready—log in to get started.</p>
-        <button
-          onClick={() => navigate('/dashboard')}
-          className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-dark"
-        >
-          Go to Dashboard
-        </button>
+  if (completed) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
+        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
+          <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
+          <h2 className="mt-4 text-xl font-semibold text-gray-900">Welcome to Rate Monitor Pro!</h2>
+          <p className="mt-2 text-gray-600">Your account is ready. Redirecting to dashboard...</p>
+          <div className="mt-4">
+            <div className="animate-pulse inline-flex items-center text-sm text-gray-500">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
+              Redirecting...
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  return null;
 }
