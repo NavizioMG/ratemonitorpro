@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { debug, Category } from '../../lib/debug';
 import { supabase } from '../../lib/supabase';
-import { createGHLSubAccount } from '../../services/gohighlevel';
 
 const COMPONENT_ID = 'CompleteSignup';
 
@@ -43,21 +42,35 @@ export function CompleteSignup() {
           throw new Error(`Invalid email format: ${fixedEmail}`);
         }
 
-        // Create GHL sub-account and RMP contact
-        const { locationId, rmpContactId } = await createGHLSubAccount(
-          '',
-          companyName,
-          fixedEmail,
-          fullName,
-          phone,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          undefined,
-          timezone
-        );
+        // Create GHL sub-account via Edge Function
+        console.log('🔧 Creating GHL sub-account via Edge Function');
+        
+        const ghlResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-ghl-subaccount`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            userId: '', // Will update profile after user creation
+            companyName,
+            email: fixedEmail,
+            phone,
+            address: '123 Main St' // Default address
+          })
+        });
+
+        if (!ghlResponse.ok) {
+          const errorText = await ghlResponse.text();
+          console.error('GHL Edge Function Error:', errorText);
+          throw new Error(`GHL integration failed: ${ghlResponse.status}`);
+        }
+
+        const ghlResult = await ghlResponse.json();
+        const locationId = ghlResult.ghlData?.locationId;
+        const rmpContactId = null; // This Edge Function doesn't create RMP contacts
+
+        console.log('GHL sub-account created successfully:', { locationId });
 
         let userId;
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email: fixedEmail, password });
