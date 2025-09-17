@@ -19,22 +19,6 @@ const STRIPE_PRICE_ID = STRIPE_MODE === 'live'
 
 const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
-// Log current mode for debugging
-console.log('🔧 Stripe Mode:', STRIPE_MODE);
-console.log('🔧 Using Price ID:', STRIPE_PRICE_ID);
-console.log('🔧 Using Publishable Key:', STRIPE_PUBLISHABLE_KEY?.substring(0, 20) + '...');
-
-// 🔍 DEBUG: Show all available env vars
-console.log('🔧 Available Env Vars:', {
-  mode: import.meta.env.VITE_STRIPE_MODE,
-  testPrice: import.meta.env.VITE_STRIPE_PRICE_ID_TEST,
-  livePrice: import.meta.env.VITE_STRIPE_PRICE_ID_LIVE,
-  testKey: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY_TEST?.substring(0, 20),
-  liveKey: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY_LIVE?.substring(0, 20),
-  selectedPrice: STRIPE_PRICE_ID,
-  selectedKey: STRIPE_PUBLISHABLE_KEY?.substring(0, 20)
-});
-
 export const STANDARD_PLAN = {
   id: STRIPE_PRICE_ID, // 🔧 FIX: Now uses environment variable based on mode
   name: 'Standard',
@@ -54,7 +38,6 @@ export const STANDARD_PLAN = {
 // ✅ Helper to get base URL dynamically based on environment
 export function getAppUrl(): string {
   const url = import.meta.env.VITE_APP_URL || 'https://ratemonitorpro.com';
-  console.log('[Debug] Using APP URL:', url);
   return url;
 }
 

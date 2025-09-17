@@ -31,13 +31,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 // Initialize database connection monitoring
 export async function initializeSupabase() {
   try {
-    console.info('Testing Supabase connection');
-    
     // Test the connection by trying to fetch the session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    
+    const { error: sessionError } = await supabase.auth.getSession();
     if (sessionError) {
-      console.error('Session error during initialization:', sessionError);
       return false;
     }
 
@@ -48,31 +44,22 @@ export async function initializeSupabase() {
       .single();
 
     if (dbError) {
-      console.error('Database access error during initialization:', dbError);
       return false;
     }
 
-    console.info('Supabase initialization successful', {
-      authenticated: !!session
-    });
-
     return true;
   } catch (err) {
-    console.error('Supabase initialization error:', err);
     return false;
   }
 }
 
 // Clean up on page unload
 window.addEventListener('beforeunload', () => {
-  console.info('Cleaning up Supabase connection');
+  // Potential cleanup logic can go here if needed in the future
 });
 
 // Monitor auth state changes
 supabase.auth.onAuthStateChange((event, session) => {
-  console.info('Auth state change', {
-    event,
-    userId: session?.user?.id,
-    timestamp: new Date().toISOString()
-  });
+  // This listener is often used to update UI state,
+  // but we've removed the console log for production.
 });

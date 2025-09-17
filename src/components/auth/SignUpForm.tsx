@@ -4,8 +4,6 @@ import { debug, Category } from '../../lib/debug';
 import { createCheckoutSession } from '../../services/stripe';
 import { getAppUrl } from '../../services/stripe'; // 👈 only if it's not already imported
 
-console.log('APP URL:', getAppUrl()); // ✅ this is the line that will log the value
-
 export function SignUpForm() {
   const [formData, setFormData] = useState({
     email: '',

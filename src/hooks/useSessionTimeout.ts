@@ -33,7 +33,6 @@ export const useSessionTimeout = (config?: Partial<SessionTimeoutConfig>) => {
   const handleSessionExpired = async () => {
     clearAllTimers();
     setShowWarning(false);
-    console.log('Session expired - automatically signing out');
     await signOut();
   };
 
@@ -75,8 +74,6 @@ export const useSessionTimeout = (config?: Partial<SessionTimeoutConfig>) => {
     sessionTimer.current = setTimeout(() => {
       handleSessionExpired();
     }, finalConfig.sessionDuration);
-    
-    console.log(`Session timeout set for ${finalConfig.sessionDuration / (1000 * 60 * 60)} hours`);
   };
 
   // Track user activity to reset timers
