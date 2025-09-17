@@ -17,6 +17,13 @@ console.log('🔧 Stripe Mode:', STRIPE_MODE);
 console.log('🔧 Using Price ID:', STRIPE_PRICE_ID);
 console.log('🔧 Using Publishable Key:', STRIPE_PUBLISHABLE_KEY?.substring(0, 20) + '...');
 
+// 🔍 DEBUG: Add this temporary debug line
+console.log('🔧 All Stripe Env Vars:', {
+  mode: import.meta.env.VITE_STRIPE_MODE,
+  priceId: import.meta.env.VITE_STRIPE_PRICE_ID,
+  publishableKey: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY?.substring(0, 20)
+});
+
 export const STANDARD_PLAN = {
   id: STRIPE_PRICE_ID, // 🔧 FIX: Now uses environment variable
   name: 'Standard',
