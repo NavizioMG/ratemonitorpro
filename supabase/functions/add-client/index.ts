@@ -1,10 +1,10 @@
 // supabase/functions/add-client/index.ts
 import { serve } from "https://deno.land/std@0.131.0/http/server.ts";
 
-// ✅ Load environment variables securely FIRST
+// ✅ Load environment variables securely FIRST - using your existing variable names
 const GHL_API_KEY = Deno.env.get("VITE_GHL_API_KEY") || "";
-const GHL_LOCATION_ID = Deno.env.get("VITE_RMP_LOCATION_ID") || "";
-const GHL_COMPANY_ID = Deno.env.get("VITE_GHL_COMPANY_ID") || "";
+const GHL_LOCATION_ID = Deno.env.get("RMP_LOCATION_ID") || "";
+const GHL_COMPANY_ID = Deno.env.get("GHL_COMPANY_ID") || "";
 
 // Now we can log them
 console.log("🔧 Environment check:", {

@@ -173,10 +173,30 @@ export function CompleteSignup() {
         localStorage.clear();
         setCompleted(true);
         
-        // Wait a moment for auth state to update, then redirect
+        // 🔧 AGGRESSIVE REDIRECT: Try multiple methods
+        console.log('🔧 Attempting navigation to dashboard...');
+        console.log('🔧 Current location:', window.location.pathname);
+        
+        // Method 1: React Router navigate
+        navigate('/dashboard', { replace: true });
+        
+        // Method 2: If React Router fails, use window.location as backup
         setTimeout(() => {
-          navigate('/dashboard', { replace: true });
-        }, 1500);
+          console.log('🔧 Location after 2s:', window.location.pathname);
+          if (window.location.pathname !== '/dashboard') {
+            console.log('🔧 React Router failed, using window.location...');
+            window.location.href = '/dashboard';
+          }
+        }, 2000);
+        
+        // Method 3: Final fallback
+        setTimeout(() => {
+          console.log('🔧 Location after 3s:', window.location.pathname);
+          if (window.location.pathname !== '/dashboard') {
+            console.log('🔧 All redirects failed, forcing reload to dashboard...');
+            window.location.replace('/dashboard');
+          }
+        }, 3000);
 
       } catch (err) {
         console.error('Signup error:', err.message);
