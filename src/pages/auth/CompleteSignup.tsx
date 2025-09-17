@@ -7,13 +7,23 @@ import { supabase } from '../../lib/supabase';
 const COMPONENT_ID = 'CompleteSignup';
 
 export function CompleteSignup() {
-  console.log('🚨 CompleteSignup component loaded!'); // Add this line
+  console.log('🚨 CompleteSignup component loaded!');
+  console.log('🚨 Current URL:', window.location.href);
+  console.log('🚨 Search params:', window.location.search);
+  
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [completed, setCompleted] = useState(false);
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const hasRun = useRef(false);
+
+  // 🔧 IMMEDIATE CHECK: Log if we have success param
+  useEffect(() => {
+    const success = searchParams.get('success');
+    console.log('🚨 Success param:', success);
+    console.log('🚨 All params:', Object.fromEntries(searchParams.entries()));
+  }, [searchParams]);
 
   useEffect(() => {
     if (completed || hasRun.current) return;

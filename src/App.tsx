@@ -48,8 +48,8 @@ export function App() {
         <Route path="/cookies" element={<CookiePolicy />} />
         <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
         
-        {/* ✅ FIXED: CompleteSignup should NOT be wrapped in PublicRoute */}
-        <Route path="/auth/complete-signup" element={<CompleteSignup />} />
+        {/* ✅ FIXED: Move CompleteSignup to neutral route */}
+        <Route path="/complete-signup" element={<CompleteSignup />} />
 
         {/* Protected routes with DashboardLayout */}
         <Route path="/dashboard" element={

@@ -86,7 +86,7 @@ export async function createCheckoutSession(formData: {
   phone?: string;
 }) {
   try {
-    validateStripeConfig(); // 🔧 FIX: Validate before proceeding
+    validateStripeConfig();
     
     debug.logInfo(Category.API, 'Creating checkout session', { 
       email: formData.email,
@@ -101,7 +101,7 @@ export async function createCheckoutSession(formData: {
       lineItems: [{ price: STANDARD_PLAN.id, quantity: 1 }],
       mode: 'subscription',
       customerEmail: formData.email,
-      successUrl: `${appUrl}/auth/complete-signup?success=true`,
+      successUrl: `${appUrl}/complete-signup?success=true`, // ✅ FIXED: New neutral route
       cancelUrl: `${appUrl}/auth?canceled=true`,
       clientReferenceId: `${formData.fullName}|${formData.companyName}|${formData.phone || ''}`,
     });
