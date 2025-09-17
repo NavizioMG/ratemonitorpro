@@ -116,10 +116,67 @@ export function CompleteSignup() {
           type: 'system'
         });
 
+        // 🔧 NEW: Add GHL integration via Supabase Edge Function
+        console.log('🔧 Creating GHL contact via Edge Function');
+        try {
+          const ghlResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/add-client`, {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({
+              fullName,
+              email: fixedEmail,
+              phone,
+              companyName,
+              timezone
+            }),
+          });
+
+          const ghlResult = await ghlResponse.json();
+
+          if (!ghlResponse.ok) {
+            console.error('🔧 GHL integration failed:', ghlResult);
+            // Don't throw error - let signup continue even if GHL fails
+          } else {
+            console.log('🔧 GHL contact created successfully:', ghlResult);
+          }
+        } catch (ghlError) {
+          console.error('🔧 GHL integration error:', ghlError);
+          // Don't throw error - let signup continue even if GHL fails
+        }
+
+        // 🔧 DEBUG: Check auth state before redirect
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        console.log('🔧 Auth state before redirect:', {
+          hasSession: !!session,
+          userId: session?.user?.id,
+          email: session?.user?.email,
+          error: sessionError
+        });
+
+        // Also check if profile was created
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .single();
+        
+        console.log('🔧 Profile check:', {
+          hasProfile: !!profile,
+          profile,
+          profileError
+        });
+
         console.log('🔧 Signup completion successful - cleaning up and redirecting');
         localStorage.clear();
         setCompleted(true);
-        navigate('/dashboard');
+        
+        // Wait a moment for auth state to update, then redirect
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 1500);
 
       } catch (err) {
         console.error('Signup error:', err.message);
