@@ -62,7 +62,7 @@
 1. Verify all environment variables
 2. Test authentication flow
 3. Test signup → payment → dashboard flow
-4. Verify rate monitoring
+4. Verify rate monitoring (MortgageNewsDaily scraping)
 5. Test subscription system
 6. Check notifications
 7. Test GHL integrations

@@ -27,7 +27,7 @@ Rate Monitor Pro (RMP) is a SaaS web app for mortgage brokers and loan officers.
 
 **Frontend:** Vite + React + TypeScript + Tailwind + Lucide Icons
 **Backend:** Supabase (PostgreSQL, Auth, RLS, Realtime) + Edge Functions
-**APIs:** FRED API (rates), Stripe (billing), GHL API (CRM automation)
+**APIs:** MortgageNewsDaily (rate scraping), Stripe (billing), GHL API (CRM automation)
 **Hosting:** Netlify + Supabase
 
 ---

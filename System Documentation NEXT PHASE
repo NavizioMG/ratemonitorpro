@@ -1,0 +1,165 @@
+# Rate Monitoring System Documentation
+
+## Current Implementation Status
+
+### Working Rate Types:
+- ✅ **30-Year Conventional** - Fully implemented and tested
+- 🔧 **20-Year Conventional** - To be implemented
+- 🔧 **15-Year Conventional** - To be implemented  
+- 🔧 **FHA Loans** - To be implemented
+- 🔧 **VA Loans** - To be implemented
+
+## Rate Data Source
+
+**Primary Source:** MortgageNewsDaily.com
+- **Method:** Web scraping
+- **Update Frequency:** During business hours (9 AM - 5 PM EST)
+- **Reliability:** High for 30-year rates
+- **Backup Strategy:** Rate caching with fallback mechanisms
+
+### Why MortgageNewsDaily vs FRED:
+- Real-time updates throughout the day
+- More mortgage-specific rate data
+- Better granularity for different loan types
+- Faster update cycles than government data
+
+## Technical Implementation
+
+### Rate Scraping Function:
+- **Location:** `api/supabase/functions/fetch-rates/`
+- **Current Status:** Working for 30-year conventional
+- **Error Handling:** Implements fallback and retry logic
+- **Cache Duration:** 1 hour per scrape
+- **Rate Limiting:** Respects site policies
+
+### Data Flow:
+1. **Scheduled scraping** during business hours
+2. **Rate validation** and formatting
+3. **Database storage** in `rate_history` table
+4. **Client rate comparison** against target rates
+5. **Alert triggering** via GHL workflows
+
+## Database Schema
+
+### Rate Storage:
+```sql
+CREATE TABLE rate_history (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  rate_date DATE NOT NULL,
+  rate_type TEXT NOT NULL,        -- '30-year', '20-year', '15-year', 'FHA', 'VA'
+  rate_value DECIMAL(5,3) NOT NULL,
+  term_years INTEGER NOT NULL,
+  loan_type TEXT,                 -- 'conventional', 'fha', 'va'
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+```
+
+### Current Data:
+- `rate_type: '30-year'`
+- `loan_type: 'conventional'`
+- Daily rate updates stored and tracked
+
+## Future Rate Type Implementation
+
+### Planned Expansion:
+1. **20-Year Conventional**
+   - Similar scraping logic to 30-year
+   - Additional parsing for 20-year section
+   
+2. **15-Year Conventional**
+   - Most popular refinance option
+   - High priority for implementation
+
+3. **FHA Loans**
+   - Government-backed loans
+   - Different rate structure
+   - Popular with first-time buyers
+
+4. **VA Loans**
+   - Veterans Affairs backed
+   - Typically lower rates
+   - No down payment options
+
+### Implementation Requirements:
+- Update scraping logic for multiple rate types
+- Enhance database schema for loan type differentiation
+- Modify client rate tracking to support multiple loan types
+- Update notification system for different rate categories
+
+## Rate Monitoring Logic
+
+### Current Workflow:
+1. **Daily scraping** of 30-year rates
+2. **Rate comparison** against client target rates
+3. **Alert generation** when targets are met
+4. **Notification delivery** via GHL
+
+### Alert Conditions:
+- Target rate reached or exceeded
+- Rate drops below target threshold
+- Significant rate changes (configurable)
+
+## Testing & Reliability
+
+### Current Status:
+- **30-year rate scraping:** Thoroughly tested and reliable
+- **Data accuracy:** Validated against manual checks
+- **Error handling:** Robust fallback mechanisms
+- **Performance:** Efficient with proper caching
+
+### Monitoring:
+- Track scraping success rates
+- Monitor data accuracy
+- Alert on scraping failures
+- Log rate parsing errors
+
+## Integration Points
+
+### Client Management:
+- Target rates stored per client
+- Rate type preferences
+- Alert preferences and timing
+
+### GHL Workflow:
+- Automated notifications when rates hit targets
+- Client contact via preferred communication method
+- Rate update summaries
+
+### Dashboard Display:
+- Current rate widgets
+- Historical rate charts
+- Rate trend analysis
+- Client rate status indicators
+
+## Environment Configuration
+
+```bash
+# Rate monitoring settings
+RATE_UPDATE_INTERVAL=3600000      # 1 hour in milliseconds
+BUSINESS_HOURS_START=9           # 9 AM EST
+BUSINESS_HOURS_END=17            # 5 PM EST
+RATE_CACHE_DURATION=3600000      # 1 hour cache
+
+# Scraping configuration
+RATE_SCRAPING_TIMEOUT=30000      # 30 second timeout
+MAX_RETRY_ATTEMPTS=3             # Retry failed scrapes
+RATE_VALIDATION_THRESHOLD=0.1    # Rate change validation
+```
+
+## Roadmap
+
+### Phase 1 (Current):
+- ✅ 30-year conventional rate monitoring
+- ✅ Basic alert system
+- ✅ Database storage and retrieval
+
+### Phase 2 (Next):
+- 🔧 20-year and 15-year conventional rates
+- 🔧 Enhanced rate comparison logic
+- 🔧 Improved client rate management
+
+### Phase 3 (Future):
+- 🔧 FHA and VA loan rates
+- 🔧 Regional rate variations
+- 🔧 Advanced analytics and predictions
+- 🔧 Multiple rate source integration
