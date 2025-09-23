@@ -14,7 +14,7 @@ export function CompleteSignup() {
   const hasRun = useRef(false);
   const { session, loading: authLoading, isAuthenticated } = useAuth();
 
-  // Redirect when auth is ready
+  // Redirect when auth is ready (give it more time)
   useEffect(() => {
     if (completed && isAuthenticated && !authLoading) {
       setTimeout(() => navigate('/dashboard', { replace: true }), 500);
@@ -105,6 +105,9 @@ export function CompleteSignup() {
           console.error('Welcome email failed:', emailError);
         }
     
+        // Wait for auth context to properly sync (replacing the time that GHL calls used to provide)
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Give auth context time to update
+    
         // Clear local storage and mark as completed
         localStorage.clear();
         setCompleted(true);
@@ -132,7 +135,7 @@ export function CompleteSignup() {
             Welcome to <span className="text-primary">Rate Monitor Pro</span>
           </h2>
           <p className="text-gray-600 mb-6">
-            We're setting up your account and dashboard access.
+            We're building your dashboard and finishing account setup.
           </p>
           <div className="flex justify-center">
             <div className="relative">
@@ -143,7 +146,7 @@ export function CompleteSignup() {
             </div>
           </div>
           <p className="text-gray-400 text-xs mt-6">
-            This usually only takes a few seconds...
+            This usually only takes a few seconds…
           </p>
         </div>
       </div>
@@ -194,7 +197,7 @@ export function CompleteSignup() {
             </div>
           </div>
           <p className="text-gray-400 text-xs mt-6">
-            Almost there...
+            Almost there…
           </p>
         </div>
       </div>
