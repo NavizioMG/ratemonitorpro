@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { sendWelcomeEmail } from '../../services/email';
+/*import { sendWelcomeEmail } from '../../services/email'; */
 
 export function CompleteSignup() {
   const [loading, setLoading] = useState(true);
@@ -14,10 +14,35 @@ export function CompleteSignup() {
   const hasRun = useRef(false);
   const { session, loading: authLoading, isAuthenticated } = useAuth();
 
-  // Redirect when auth is ready (give it more time)
+  // Debug auth state changes
   useEffect(() => {
+    console.log('=== AUTH STATE DEBUG ===');
+    console.log('completed:', completed);
+    console.log('isAuthenticated:', isAuthenticated);
+    console.log('authLoading:', authLoading);
+    console.log('session:', session);
+    console.log('session user id:', session?.user?.id);
+    console.log('session profile:', session?.profile);
+    console.log('========================');
+  }, [completed, isAuthenticated, authLoading, session]);
+
+  // Redirect when auth is ready
+  useEffect(() => {
+    console.log('Redirect check:', { completed, isAuthenticated, authLoading });
+    
     if (completed && isAuthenticated && !authLoading) {
-      setTimeout(() => navigate('/dashboard', { replace: true }), 500);
+      console.log('CONDITIONS MET - Redirecting to dashboard in 500ms');
+      setTimeout(() => {
+        console.log('Executing redirect to dashboard');
+        navigate('/dashboard', { replace: true });
+      }, 500);
+    } else {
+      console.log('Redirect conditions not met:', {
+        completed,
+        isAuthenticated, 
+        authLoading,
+        willRedirect: completed && isAuthenticated && !authLoading
+      });
     }
   }, [completed, isAuthenticated, authLoading, navigate]);
 
@@ -27,37 +52,74 @@ export function CompleteSignup() {
 
     const completeSignup = async () => {
       try {
+        console.log('=== SIGNUP PROCESS START ===');
+        
         const success = searchParams.get('success');
+        console.log('Payment success param:', success);
         if (!success || success !== 'true') throw new Error('Payment was not completed');
-    
+
+        // Debug: Log all available data
+        console.log('URL searchParams:', Object.fromEntries(searchParams.entries()));
+        console.log('localStorage data:', {
+          email: localStorage.getItem('signupEmail'),
+          fullName: localStorage.getItem('signupFullName'),
+          companyName: localStorage.getItem('signupCompanyName'),
+          phone: localStorage.getItem('signupPhone'),
+          password: !!localStorage.getItem('signupPassword'), // Don't log actual password
+          timezone: localStorage.getItem('signupTimezone')
+        });
+
         const email = searchParams.get('email') || localStorage.getItem('signupEmail');
         const fullName = searchParams.get('fullName') || localStorage.getItem('signupFullName');
         const companyName = searchParams.get('companyName') || localStorage.getItem('signupCompanyName');
         const phone = searchParams.get('phone') || localStorage.getItem('signupPhone') || '';
         const password = searchParams.get('password') || localStorage.getItem('signupPassword');
         const timezone = searchParams.get('timezone') || localStorage.getItem('signupTimezone');
-    
+
+        console.log('Extracted data:', { 
+          email, 
+          fullName, 
+          companyName, 
+          phone: !!phone, 
+          password: !!password, 
+          timezone 
+        });
+
         if (!email || !fullName || !companyName || !password || !timezone) {
+          console.error('Missing required fields:', {
+            email: !!email,
+            fullName: !!fullName,
+            companyName: !!companyName,
+            password: !!password,
+            timezone: !!timezone
+          });
           localStorage.clear();
           throw new Error('Signup data missing—please start over');
         }
-    
+
         const fixedEmail = email.replace(' ', '+');
+        console.log('Using email:', fixedEmail);
+        
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fixedEmail)) {
           throw new Error(`Invalid email format: ${fixedEmail}`);
         }
-    
+
+        console.log('Attempting sign in...');
+
         // Try to sign in first (user might already exist from Stripe webhook)
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ 
           email: fixedEmail, 
           password 
         });
-    
+
         let userId;
-    
+
         if (signInData?.user) {
+          console.log('Sign in successful, user exists:', signInData.user.id);
           userId = signInData.user.id;
         } else if (signInError?.message === 'Invalid login credentials') {
+          console.log('User does not exist, creating new account...');
+          
           // Create new account
           const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
             email: fixedEmail,
@@ -71,22 +133,34 @@ export function CompleteSignup() {
               }
             }
           });
-    
-          if (signUpError) throw signUpError;
+
+          if (signUpError) {
+            console.error('Sign up error:', signUpError);
+            throw signUpError;
+          }
           
+          console.log('Sign up successful:', signUpData.user?.id);
           userId = signUpData.user?.id;
           if (!userId) throw new Error('User ID not found after signup');
-    
+
+          console.log('Signing in newly created user...');
           // Sign in the newly created user
           const { error: newSignInError } = await supabase.auth.signInWithPassword({ 
             email: fixedEmail, 
             password 
           });
-          if (newSignInError) throw newSignInError;
+          if (newSignInError) {
+            console.error('Sign in after signup error:', newSignInError);
+            throw newSignInError;
+          }
+          console.log('Sign in after signup successful');
         } else {
+          console.error('Sign in error:', signInError);
           throw signInError;
         }
-    
+
+        console.log('Updating profile for user:', userId);
+
         // Update user profile
         const { error: updateError } = await supabase.from('profiles').upsert({
           id: userId,
@@ -95,25 +169,38 @@ export function CompleteSignup() {
           phone,
           timezone
         }, { onConflict: 'id' });
-    
-        if (updateError) throw updateError;
-    
+
+        if (updateError) {
+          console.error('Profile update error:', updateError);
+          throw updateError;
+        }
+
+        console.log('Profile updated successfully');
+
         // Send welcome email (non-blocking)
         try {
+          console.log('Sending welcome email to:', fixedEmail);
           await sendWelcomeEmail(fixedEmail, fullName, companyName);
+          console.log('Welcome email sent successfully');
         } catch (emailError) {
           console.error('Welcome email failed:', emailError);
         }
-    
+
         // Wait for auth context to properly sync (replacing the time that GHL calls used to provide)
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Give auth context time to update
-    
+        console.log('Waiting for auth context to sync...');
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        console.log('Auth sync wait complete');
+
         // Clear local storage and mark as completed
         localStorage.clear();
+        console.log('Setting completed = true');
         setCompleted(true);
         setLoading(false);
-    
+        console.log('=== SIGNUP PROCESS COMPLETE ===');
+
       } catch (err) {
+        console.error('=== SIGNUP PROCESS ERROR ===');
+        console.error('Error:', err);
         setError(err instanceof Error ? err.message : 'Failed to complete signup');
         setLoading(false);
       }
@@ -135,7 +222,7 @@ export function CompleteSignup() {
             Welcome to <span className="text-primary">Rate Monitor Pro</span>
           </h2>
           <p className="text-gray-600 mb-6">
-            We're building your dashboard and finishing account setup.
+            We're setting up your account and dashboard access.
           </p>
           <div className="flex justify-center">
             <div className="relative">
@@ -146,7 +233,7 @@ export function CompleteSignup() {
             </div>
           </div>
           <p className="text-gray-400 text-xs mt-6">
-            This usually only takes a few seconds…
+            This usually only takes a few seconds...
           </p>
         </div>
       </div>
@@ -197,7 +284,7 @@ export function CompleteSignup() {
             </div>
           </div>
           <p className="text-gray-400 text-xs mt-6">
-            Almost there…
+            Almost there...
           </p>
         </div>
       </div>
