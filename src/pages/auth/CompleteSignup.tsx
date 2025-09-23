@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { sendWelcomeEmail } from '../../services/email';
 
 export function CompleteSignup() {
   const [loading, setLoading] = useState(true);
@@ -13,7 +14,7 @@ export function CompleteSignup() {
   const hasRun = useRef(false);
   const { session, loading: authLoading, isAuthenticated } = useAuth();
 
-  // Redirect when auth is ready (give it more time)
+  // Redirect when auth is ready
   useEffect(() => {
     if (completed && isAuthenticated && !authLoading) {
       setTimeout(() => navigate('/dashboard', { replace: true }), 500);
@@ -46,7 +47,7 @@ export function CompleteSignup() {
           throw new Error(`Invalid email format: ${fixedEmail}`);
         }
 
-        // Try to sign in first
+        // Try to sign in first (user might already exist from Stripe webhook)
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ 
           email: fixedEmail, 
           password 
@@ -97,64 +98,15 @@ export function CompleteSignup() {
 
         if (updateError) throw updateError;
 
-        // Create welcome notification
-        await supabase.from('notifications').insert({
-          user_id: userId,
-          title: 'Welcome to Rate Monitor Pro!',
-          message: 'Your account is now active. Get started by adding your first client.',
-          type: 'system'
-        });
-
-        // Create RMP contact and store ID
+        // Send welcome email
         try {
-          const contactResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/add-client`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-            },
-            body: JSON.stringify({
-              fullName,
-              email: fixedEmail,
-              phone,
-              companyName,
-              timezone
-            }),
-          });
-
-          if (contactResponse.ok) {
-            const contactResult = await contactResponse.json();
-            // Store RMP contact ID in profile
-            await supabase.from('profiles').update({
-              ghl_rmp_contact_id: contactResult.contactId
-            }).eq('id', userId);
-          }
-        } catch (contactError) {
-          // Non-critical
+          await sendWelcomeEmail(fixedEmail, fullName, companyName);
+        } catch (emailError) {
+          // Non-critical - don't fail signup if email fails
+          console.error('Welcome email failed:', emailError);
         }
 
-        // Create GHL sub-account
-        try {
-          await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-ghl-subaccount`, {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-            },
-            body: JSON.stringify({
-              userId,
-              fullName,
-              email: fixedEmail,
-              phone,
-              companyName,
-              timezone
-            }),
-          });
-        } catch (subaccountError) {
-          // Non-critical
-        }
-
-        // Wait longer for auth context to sync
+        // Wait for auth context to sync
         let attempts = 0;
         const maxAttempts = 10; // 5 seconds
         
@@ -192,7 +144,7 @@ export function CompleteSignup() {
             Welcome to <span className="text-primary">Rate Monitor Pro</span>
           </h2>
           <p className="text-gray-600 mb-6">
-            We're building your dashboard and finishing account setup.
+            We're setting up your account and dashboard access.
           </p>
           <div className="flex justify-center">
             <div className="relative">
@@ -203,7 +155,7 @@ export function CompleteSignup() {
             </div>
           </div>
           <p className="text-gray-400 text-xs mt-6">
-            This usually only takes a few seconds…
+            This usually only takes a few seconds...
           </p>
         </div>
       </div>
@@ -254,7 +206,7 @@ export function CompleteSignup() {
             </div>
           </div>
           <p className="text-gray-400 text-xs mt-6">
-            Almost there…
+            Almost there...
           </p>
         </div>
       </div>

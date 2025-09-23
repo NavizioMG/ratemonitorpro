@@ -10,7 +10,7 @@ import { RateStatusBadge } from '../components/RateStatusBadge';
 import { CurrentRateCard } from '../components/CurrentRateCard';
 import { supabase } from '../lib/supabase';
 import { debug, Category } from '../lib/debug';
-import { sendWelcomeEmail } from '../services/email';
+
 
 export function Dashboard() {
   const { clients } = useClients();
@@ -133,14 +133,7 @@ export function Dashboard() {
           </p>
         </div>
       </div>
-      {/* Temporary Email Test Button */}
-      // In Dashboard.tsx, change the button to:
-<button 
-  onClick={() => sendWelcomeEmail('justinmjacobs1@gmail.com', 'Justin Jacobs', 'Big Wave Mortgage')}
-  className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
->
-  Test Email
-</button>
+
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
