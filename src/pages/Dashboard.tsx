@@ -10,6 +10,7 @@ import { RateStatusBadge } from '../components/RateStatusBadge';
 import { CurrentRateCard } from '../components/CurrentRateCard';
 import { supabase } from '../lib/supabase';
 import { debug, Category } from '../lib/debug';
+import { testResendEmail } from '../services/email';
 
 export function Dashboard() {
   const { clients } = useClients();
@@ -85,7 +86,7 @@ export function Dashboard() {
       title: 'Add New Client',
       description: 'Track a new client\'s mortgage rates',
       icon: Plus,
-      href: '/clients',
+      href: '/mortgage-clients',
       state: { openAddModal: true }
     },
     {
@@ -132,6 +133,15 @@ export function Dashboard() {
           </p>
         </div>
       </div>
+      {/* Temporary Email Test Button */}
+<div className="mt-4">
+  <button 
+    onClick={() => testResendEmail()}
+    className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600"
+  >
+    Test Email
+  </button>
+</div>
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
@@ -282,7 +292,7 @@ export function Dashboard() {
               Your account is now active—get started by adding your first client.
             </p>
             <p className="text-gray-600 mb-6 text-center">
-              Please verify your email using the link sent from GHL to secure your account.
+              Please verify your email using the link sent to secure your account.
             </p>
             <button
               onClick={handleModalClose}

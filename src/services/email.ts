@@ -12,7 +12,7 @@ export async function testResendEmail() {
         'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
       },
       body: JSON.stringify({
-        to: 'noreply.ratemonitorpro.com', // Replace with your test email
+        to: 'noreply@ratemonitorpro.com', 
         subject: 'Welcome to Rate Monitor Pro - Test Email',
         html: welcomeEmail,
         type: 'welcome'
