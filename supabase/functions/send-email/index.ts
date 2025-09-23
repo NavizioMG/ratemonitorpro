@@ -26,10 +26,11 @@ serve(async (req) => {
     }
 
     const emailData = {
-      from: 'Rate Monitor Pro <noreply@ratemonitorpro.com>',
+      from: 'Rate Monitor Pro <welcome@ratemonitorpro.com>',
       to: [to],
       subject: subject,
-      html: html
+      html: html,
+      text: `Rate Monitor Pro - ${subject}\n\nHi there,\n\nYour Rate Monitor Pro account is ready to help you track mortgage rates and manage your client portfolio.\n\nGo to Dashboard: https://ratemonitorpro.com/dashboard\n\nNeed help? Reply to this email.\n\nRate Monitor Pro - Streamlining mortgage rate tracking for professionals`
     };
 
     const response = await fetch('https://api.resend.com/emails', {
