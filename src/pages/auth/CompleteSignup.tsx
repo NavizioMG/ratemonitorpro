@@ -29,32 +29,32 @@ export function CompleteSignup() {
       try {
         const success = searchParams.get('success');
         if (!success || success !== 'true') throw new Error('Payment was not completed');
-
+    
         const email = searchParams.get('email') || localStorage.getItem('signupEmail');
         const fullName = searchParams.get('fullName') || localStorage.getItem('signupFullName');
         const companyName = searchParams.get('companyName') || localStorage.getItem('signupCompanyName');
         const phone = searchParams.get('phone') || localStorage.getItem('signupPhone') || '';
         const password = searchParams.get('password') || localStorage.getItem('signupPassword');
         const timezone = searchParams.get('timezone') || localStorage.getItem('signupTimezone');
-
+    
         if (!email || !fullName || !companyName || !password || !timezone) {
           localStorage.clear();
           throw new Error('Signup data missing—please start over');
         }
-
+    
         const fixedEmail = email.replace(' ', '+');
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fixedEmail)) {
           throw new Error(`Invalid email format: ${fixedEmail}`);
         }
-
+    
         // Try to sign in first (user might already exist from Stripe webhook)
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ 
           email: fixedEmail, 
           password 
         });
-
+    
         let userId;
-
+    
         if (signInData?.user) {
           userId = signInData.user.id;
         } else if (signInError?.message === 'Invalid login credentials') {
@@ -71,12 +71,12 @@ export function CompleteSignup() {
               }
             }
           });
-
+    
           if (signUpError) throw signUpError;
           
           userId = signUpData.user?.id;
           if (!userId) throw new Error('User ID not found after signup');
-
+    
           // Sign in the newly created user
           const { error: newSignInError } = await supabase.auth.signInWithPassword({ 
             email: fixedEmail, 
@@ -86,7 +86,7 @@ export function CompleteSignup() {
         } else {
           throw signInError;
         }
-
+    
         // Update user profile
         const { error: updateError } = await supabase.from('profiles').upsert({
           id: userId,
@@ -95,33 +95,21 @@ export function CompleteSignup() {
           phone,
           timezone
         }, { onConflict: 'id' });
-
+    
         if (updateError) throw updateError;
-
-        // Send welcome email
+    
+        // Send welcome email (non-blocking)
         try {
           await sendWelcomeEmail(fixedEmail, fullName, companyName);
         } catch (emailError) {
-          // Non-critical - don't fail signup if email fails
           console.error('Welcome email failed:', emailError);
         }
-
-        // Wait for auth context to sync
-        let attempts = 0;
-        const maxAttempts = 10; // 5 seconds
-        
-        while (attempts < maxAttempts) {
-          if (session?.user?.id === userId) {
-            break;
-          }
-          await new Promise(resolve => setTimeout(resolve, 500));
-          attempts++;
-        }
-
+    
+        // Clear local storage and mark as completed
         localStorage.clear();
         setCompleted(true);
         setLoading(false);
-
+    
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to complete signup');
         setLoading(false);
