@@ -6,7 +6,7 @@ import { useRateCalculations } from '../hooks/useRateCalculations';
 import { ClientForm } from '../components/clients/ClientForm';
 import { ClientTable } from '../components/clients/ClientTable';
 import { ClientFormData } from '../types/database';
-import { useToast } from '../components/Toast';
+import { useToast } from '../components/ui/Toast';
 import { debug, Category } from '../lib/debug';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';

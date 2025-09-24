@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Client } from '../../types/database';
-import { RateStatusBadge } from '../RateStatusBadge';
+import { RateStatusBadge } from '../ui/RateStatusBadge';
 import { 
   ArrowUpDown, 
   Pencil, 

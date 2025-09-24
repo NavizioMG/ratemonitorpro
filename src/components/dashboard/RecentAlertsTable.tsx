@@ -1,7 +1,7 @@
 // src/components/RecentAlertsTable.tsx
 import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
-import { RateStatusBadge } from '../RateStatusBadge';
+import { RateStatusBadge } from '../ui/RateStatusBadge';
 import { Client, RateStatus } from '../types'; // You may need to create or adjust this types file
 
 // Helper formatters (can be moved to a utils file)

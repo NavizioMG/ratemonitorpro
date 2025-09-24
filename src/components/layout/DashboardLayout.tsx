@@ -17,7 +17,7 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 import { NotificationBell } from './NotificationBell';
 import { useSessionTimeout } from '../../hooks/useSessionTimeout';
-import { SessionTimeoutModal } from '../SessionTimeoutModal';
+import { SessionTimeoutModal } from '../ui/SessionTimeoutModal';
 
 interface Props {
   children: ReactNode;

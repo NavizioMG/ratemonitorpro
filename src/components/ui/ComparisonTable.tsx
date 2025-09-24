@@ -1,5 +1,5 @@
 import { Check, X } from 'lucide-react';
-import { Tooltip } from './Tooltip';
+import { Tooltip } from '/ui/Tooltip';
 
 const features = [
   {

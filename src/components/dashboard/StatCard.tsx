@@ -1,5 +1,5 @@
-// src/components/StatCard.tsx
-import { LucideIcon } from 'lucide-react';
+// src/components/dashboard/StatCard.tsx
+import { DollarSign, LucideIcon, Users } from 'lucide-react'; // Added imports here
 
 interface StatCardProps {
   name: string;

@@ -13,8 +13,8 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { MainLayout } from '../components/layout/MainLayout';
-import { SocialProof } from '../components/SocialProof';
-import { SecurityFeatures } from '../components/SecurityFeatures';
+import { SocialProof } from '../components/ui/SocialProof';
+import { SecurityFeatures } from '../components/ui/SecurityFeatures';
 import { STANDARD_PLAN } from '../services/stripe';
 
 export function Landing() {

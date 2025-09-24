@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, ArrowUp, ArrowDown, RefreshCw, Clock, AlertTriangle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
-import { debug, Category } from '../lib/debug';
+// 👇 These two import paths are the only lines that have been changed
+import { supabase } from '../../lib/supabase';
+import { debug, Category } from '../../lib/debug';
 
 interface Rate {
   rate_value: number;

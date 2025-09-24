@@ -3,7 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import { TrendingUp, AlertTriangle, ArrowDown, ArrowUp, Info, ChevronDown } from 'lucide-react';
 import { useClients } from '../hooks/useClients';
 import { useRateHistory } from '../hooks/useRateHistory';
-import { RateStatusBadge } from '../components/RateStatusBadge';
+import { RateStatusBadge } from '../components/ui/RateStatusBadge';
 
 // Calculate monthly mortgage payment
 function calculateMonthlyPayment(principal: number, annualRate: number, years: number): number {

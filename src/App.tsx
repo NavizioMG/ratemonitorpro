@@ -1,6 +1,6 @@
 // src/App.tsx (Updated)
 import { Outlet } from 'react-router-dom';
-import { Head } from './components/Head';
+import { Head } from './components/ui/Head';
 
 export function App() {
   return (
