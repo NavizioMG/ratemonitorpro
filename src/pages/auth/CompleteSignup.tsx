@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { sendWelcomeEmail } from '../../services/email'; // Or the correct path
+/* import { sendWelcomeEmail } from '../../services/email'; */
 
 export function CompleteSignup() {
   const [status, setStatus] = useState<'loading' | 'error' | 'success'>('loading');
@@ -13,35 +13,44 @@ export function CompleteSignup() {
   const hasRun = useRef(false);
   const { isAuthenticated, authLoading } = useAuth();
 
-  // Effect to handle the redirection once the user is authenticated.
-  // This is the single source of truth for redirection.
+  // FIX #1: This effect now derives the UI state from the auth state.
+  // When the user is authenticated, it shows the success screen.
   useEffect(() => {
+    // If we are already authenticated and no longer loading, show the success screen.
     if (isAuthenticated && !authLoading) {
-      navigate('/dashboard', { replace: true });
+      setStatus('success');
     }
-  }, [isAuthenticated, authLoading, navigate]);
+  }, [isAuthenticated, authLoading]);
 
-  // Effect to run the signup and verification process once on page load.
+  // This effect handles the final redirect after the success message is shown.
   useEffect(() => {
-    if (hasRun.current) return;
+    if (status === 'success') {
+      // We add a small delay so the user can see the "Success!" message.
+      const timer = setTimeout(() => {
+        navigate('/dashboard', { replace: true });
+      }, 1500); // 1.5-second delay before redirect
+
+      return () => clearTimeout(timer);
+    }
+  }, [status, navigate]);
+
+  // This effect runs the one-time signup process.
+  useEffect(() => {
+    // FIX #2: We add a guard here. If the user is already authenticated,
+    // we don't need to run this process at all. This prevents duplicate emails on refresh.
+    if (isAuthenticated || hasRun.current) {
+      return;
+    }
     hasRun.current = true;
 
     const completeSignupProcess = async () => {
       try {
-        // 1. Get Session ID from URL
-        const success = searchParams.get('success');
         const sessionId = searchParams.get('session_id');
-        
-        if (!success || success !== 'true') throw new Error('Payment was not completed successfully.');
         if (!sessionId) throw new Error('Session ID is missing from the URL.');
     
-        // 2. Verify payment and get user data from your server
         const sessionResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-checkout-session`, {
           method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
-          },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`},
           body: JSON.stringify({ sessionId }),
         });
     
@@ -52,58 +61,44 @@ export function CompleteSignup() {
     
         const { userData } = await sessionResponse.json();
         if (!userData || !userData.email || !userData.password) {
-          throw new Error('Required signup data is missing from the session. Please sign up again.');
+          throw new Error('Required signup data is missing. Please sign up again.');
         }
     
         const { email, fullName, companyName, phone = '', password, timezone } = userData;
         
-        // 3. Try to sign in the user (in case a webhook already created them)
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ 
-          email: email, 
-          password 
-        });
+        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
     
         let userId = signInData?.user?.id;
     
-        // 4. If user doesn't exist, sign them up
         if (signInError?.message === 'Invalid login credentials') {
           const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email: email,
+            email,
             password,
             options: { data: { full_name: fullName, company_name: companyName, phone, timezone } }
           });
     
           if (signUpError) throw signUpError;
           if (!signUpData.user) throw new Error('Failed to create user account.');
-          
           userId = signUpData.user.id;
         } else if (signInError) {
           throw signInError;
         }
-    
+
         if (!userId) throw new Error('Could not determine user ID.');
     
-        // 5. Create or update the user's public profile
         const { error: updateError } = await supabase.from('profiles').upsert({
-          id: userId,
-          full_name: fullName,
-          company_name: companyName,
-          phone,
-          timezone
+          id: userId, full_name: fullName, company_name: companyName, phone, timezone
         }, { onConflict: 'id' });
     
         if (updateError) throw updateError;
     
-        // 6. Send the welcome email (fire-and-forget)
-        try {
-          sendWelcomeEmail(email, fullName, companyName); // Notice 'await' is removed
-        } catch (emailError) {
-          // Log the error but don't block the user from proceeding
+        // Send the welcome email (fire-and-forget)
+        sendWelcomeEmail(email, fullName, companyName).catch(emailError => {
           console.error('Welcome email failed to send:', emailError);
-        }
+        });
     
-        // 7. Finally, set the status to success
-        setStatus('success');
+        // The process is done. We don't set status here anymore.
+        // The effects above will now take over when the auth state changes.
     
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An unknown error occurred.');
@@ -112,8 +107,10 @@ export function CompleteSignup() {
     };
 
     completeSignupProcess();
-  }, [searchParams, navigate]);
+  }, [searchParams, navigate, isAuthenticated]);
 
+  // --- JSX for different states (loading, error, success) remains the same ---
+  
   if (status === 'loading') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary/10 via-white to-primary/5 flex items-center justify-center px-4">

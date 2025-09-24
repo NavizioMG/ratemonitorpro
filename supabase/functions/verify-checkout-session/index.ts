@@ -1,9 +1,16 @@
-//supabase/functions/verify-checkout-session/index.ts
+// supabase/functions/verify-checkout-session/index.ts
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import Stripe from 'https://esm.sh/stripe@12.18.0';
+import Stripe from 'https://esm.sh/stripe@14.17.0?target=deno'; // Updated for consistency
 
-const stripe = new Stripe(Deno.env.get('STRIPE_SECRET_KEY') || '', {
-  apiVersion: '2023-10-16',
+// NEW: Mode-aware logic for keys
+const stripeMode = Deno.env.get("STRIPE_MODE") || 'test';
+
+const stripeKey = stripeMode === 'live'
+  ? Deno.env.get("STRIPE_SECRET_KEY_LIVE")
+  : Deno.env.get("STRIPE_SECRET_KEY_TEST");
+
+const stripe = new Stripe(stripeKey, {
+  apiVersion: '2022-11-15', // Updated for consistency
 });
 
 const corsHeaders = {
@@ -14,13 +21,16 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   try {
+    // Check that the correct key for the current mode is present
+    if (!stripeKey) throw new Error(`STRIPE_SECRET_KEY_${stripeMode.toUpperCase()} is missing`);
+
     const { sessionId } = await req.json();
+    if (!sessionId) throw new Error("Session ID is required");
 
     // Retrieve the checkout session
     const session = await stripe.checkout.sessions.retrieve(sessionId);
@@ -29,7 +39,6 @@ serve(async (req) => {
       throw new Error('Payment not completed');
     }
 
-    // Get user data from session metadata
     const userData = JSON.parse(session.metadata?.userData || '{}');
     if (!userData.email) {
       throw new Error('No user data found in session');
@@ -46,7 +55,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error('Error verifying checkout session:', error);
+    console.error(`Error verifying checkout session: ${error.message}`);
     return new Response(
       JSON.stringify({ error: error.message }),
       {
@@ -54,7 +63,7 @@ serve(async (req) => {
           ...corsHeaders,
           'Content-Type': 'application/json'
         },
-        status: 400,
+        status: 400, // Changed to 400 for client errors, 500 for server errors
       }
     );
   }

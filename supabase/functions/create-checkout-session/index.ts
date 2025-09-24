@@ -2,8 +2,16 @@
 import { serve } from "https://deno.land/std@0.131.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.17.0?target=deno";
 
-const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-const stripePriceId = Deno.env.get("STRIPE_PRICE_ID");
+// NEW: Mode-aware logic for keys and price IDs
+const stripeMode = Deno.env.get("STRIPE_MODE") || 'test';
+
+const stripeKey = stripeMode === 'live'
+  ? Deno.env.get("STRIPE_SECRET_KEY_LIVE")
+  : Deno.env.get("STRIPE_SECRET_KEY_TEST");
+
+const stripePriceId = stripeMode === 'live'
+  ? Deno.env.get("STRIPE_PRICE_ID_LIVE")
+  : Deno.env.get("STRIPE_PRICE_ID_TEST");
 
 const stripe = new Stripe(stripeKey, { apiVersion: "2022-11-15" });
 const corsHeaders = { 
@@ -16,8 +24,9 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
 
   try {
-    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is missing");
-    if (!stripePriceId) throw new Error("STRIPE_PRICE_ID is missing");
+    // Check that the correct keys for the current mode are present
+    if (!stripeKey) throw new Error(`STRIPE_SECRET_KEY_${stripeMode.toUpperCase()} is missing`);
+    if (!stripePriceId) throw new Error(`STRIPE_PRICE_ID_${stripeMode.toUpperCase()} is missing`);
     
     const { email, userData } = await req.json();
     if (!email) throw new Error("Email is required");
@@ -27,7 +36,7 @@ serve(async (req) => {
       mode: "subscription",
       customer_email: email,
       line_items: [{ 
-        price: stripePriceId,
+        price: stripePriceId, // Use the mode-aware price ID
         quantity: 1 
       }],
       metadata: {
