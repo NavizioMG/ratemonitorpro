@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-/* import { sendWelcomeEmail } from '../../services/email'; */
+import { sendWelcomeEmail } from '../../services/email';
 
 export function CompleteSignup() {
   const [status, setStatus] = useState<'loading' | 'error' | 'success'>('loading');
@@ -93,8 +93,8 @@ export function CompleteSignup() {
         if (updateError) throw updateError;
     
         // Send the welcome email (fire-and-forget)
-        sendWelcomeEmail(email, fullName, companyName).catch(emailError => {
-          console.error('Welcome email failed to send:', emailError);
+      /*  sendWelcomeEmail(email, fullName, companyName).catch(emailError => {
+          console.error('Welcome email failed to send:', emailError); */
         });
     
         // The process is done. We don't set status here anymore.
