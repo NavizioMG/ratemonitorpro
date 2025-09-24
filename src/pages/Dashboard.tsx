@@ -1,5 +1,6 @@
 // src/pages/Dashboard.tsx
 import { useState, useEffect, useMemo } from 'react';
+// 👇 DollarSign has been added back to this import line
 import { TrendingUp, Users, Bell, Plus, DollarSign } from 'lucide-react'; 
 import { Link } from 'react-router-dom';
 import { useClients } from '../hooks/useClients';
@@ -43,7 +44,7 @@ export function Dashboard() {
     { 
       name: 'Potential Monthly Savings', 
       value: `$${totalSavings.toFixed(2)}`,
-      icon: DollarSign, // This line was causing the error without the import
+      icon: DollarSign, // This line was causing the error
       change: `${clientsAboveRate} clients above market rate`,
       changeType: 'neutral' as const
     },
