@@ -1,3 +1,4 @@
+//src/pages/Auth.tsx
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SignInForm } from '../components/auth/SignInForm';

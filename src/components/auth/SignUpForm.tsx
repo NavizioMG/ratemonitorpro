@@ -1,3 +1,4 @@
+//src/components/auth/SignUpForm.tsx
 import { useState } from 'react';
 import { UserPlus, AlertCircle } from 'lucide-react';
 import { debug, Category } from '../../lib/debug';

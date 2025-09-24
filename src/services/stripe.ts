@@ -1,26 +1,24 @@
-// src/services/stripe.ts - Fixed for Test/Live Suffixes
-
+// src/services/stripe.ts
 import { loadStripe } from '@stripe/stripe-js';
 import { debug, Category } from '../lib/debug';
 
 const COMPONENT_ID = 'StripeService';
 
-// 🔧 FIX: Environment-based configuration with Test/Live suffixes
 const STRIPE_MODE = import.meta.env.VITE_STRIPE_MODE || 'test'; // 'test' or 'live'
 
-// 🔧 FIX: Select the right keys based on mode
-const STRIPE_PUBLISHABLE_KEY = STRIPE_MODE === 'live' 
-  ? import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY_LIVE 
+const STRIPE_PUBLISHABLE_KEY = STRIPE_MODE === 'live'
+  ? import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY_LIVE
   : import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY_TEST;
 
 const STRIPE_PRICE_ID = STRIPE_MODE === 'live'
   ? import.meta.env.VITE_STRIPE_PRICE_ID_LIVE
   : import.meta.env.VITE_STRIPE_PRICE_ID_TEST;
 
+// stripePromise can be kept if you use Stripe Elements elsewhere in the app
 const stripePromise = loadStripe(STRIPE_PUBLISHABLE_KEY);
 
 export const STANDARD_PLAN = {
-  id: STRIPE_PRICE_ID, // 🔧 FIX: Now uses environment variable based on mode
+  id: STRIPE_PRICE_ID,
   name: 'Standard',
   price: 49.99,
   interval: 'month',
@@ -35,66 +33,58 @@ export const STANDARD_PLAN = {
   ]
 };
 
-// ✅ Helper to get base URL dynamically based on environment
 export function getAppUrl(): string {
   const url = import.meta.env.VITE_APP_URL || 'https://ratemonitorpro.com';
   return url;
 }
 
-// 🔧 FIX: Add validation for required environment variables
-function validateStripeConfig() {
-  if (!STRIPE_PUBLISHABLE_KEY) {
-    throw new Error(`VITE_STRIPE_PUBLISHABLE_KEY_${STRIPE_MODE.toUpperCase()} is required`);
-  }
-  if (!STRIPE_PRICE_ID) {
-    throw new Error(`VITE_STRIPE_PRICE_ID_${STRIPE_MODE.toUpperCase()} is required`);
-  }
-  
-  // Validate key matches mode
-  const isTestKey = STRIPE_PUBLISHABLE_KEY?.startsWith('pk_test_');
-  const isLiveKey = STRIPE_PUBLISHABLE_KEY?.startsWith('pk_live_');
-  
-  if (STRIPE_MODE === 'test' && !isTestKey) {
-    console.warn('⚠️ STRIPE_MODE is "test" but using live key!');
-  }
-  if (STRIPE_MODE === 'live' && !isLiveKey) {
-    console.warn('⚠️ STRIPE_MODE is "live" but using test key!');
-  }
-}
-
-export async function createCheckoutSession(formData: {
+/**
+ * Creates a Stripe checkout session by calling a server-side Supabase Edge Function.
+ * This is the modern, secure way to handle checkouts, allowing user data to be
+ * stored in Stripe's metadata instead of relying on localStorage.
+ */
+export const createCheckoutSession = async (userData: {
   email: string;
   fullName: string;
   companyName: string;
-  phone?: string;
-}) {
+  phone: string;
+  password: string;
+  timezone: string;
+}) => {
   try {
-    validateStripeConfig();
-    
-    debug.logInfo(Category.API, 'Creating checkout session', { 
-      email: formData.email,
-      mode: STRIPE_MODE,
-      priceId: STRIPE_PRICE_ID 
-    }, COMPONENT_ID);
+    debug.logInfo(Category.API, 'Requesting server-side checkout session', { email: userData.email }, COMPONENT_ID);
 
-    const stripe = await stripePromise;
-    const appUrl = getAppUrl();
-
-    const { error } = await stripe.redirectToCheckout({
-      lineItems: [{ price: STANDARD_PLAN.id, quantity: 1 }],
-      mode: 'subscription',
-      customerEmail: formData.email,
-      successUrl: `${appUrl}/complete-signup?success=true`, // ✅ FIXED: New neutral route
-      cancelUrl: `${appUrl}/auth?canceled=true`,
-      clientReferenceId: `${formData.fullName}|${formData.companyName}|${formData.phone || ''}`,
+    const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-checkout-session`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({
+        email: userData.email,
+        userData // Pass the full userData object to be stored in metadata
+      }),
     });
 
-    if (error) throw error;
+    if (!response.ok) {
+      const errorBody = await response.json();
+      throw new Error(errorBody.error || 'Failed to create checkout session');
+    }
+
+    const { url } = await response.json();
+
+    if (!url) {
+      throw new Error('No checkout URL returned from server');
+    }
+    
+    // Redirect the user to the Stripe Checkout page
+    window.location.href = url;
+
   } catch (err) {
     debug.logError(Category.API, 'Error creating checkout session', {}, err, COMPONENT_ID);
-    throw err;
+    throw err; // Re-throw the error so the UI can catch it
   }
-}
+};
 
 // 🔒 Placeholders for future server-side features (secured post-MVP)
 export async function getSubscriptionStatus() {
@@ -112,7 +102,7 @@ export async function getBillingHistory() {
   return [];
 }
 
-// 🔧 NEW: Helper to check current mode
+// 🔧 Helper to check current mode
 export function getStripeMode() {
   return STRIPE_MODE;
 }
