@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { sendWelcomeEmail } from '../../services/email';
+// import { sendWelcomeEmail } from '../../services/email'; // Uncomment when ready
 
 export function CompleteSignup() {
   const [status, setStatus] = useState<'loading' | 'error' | 'success'>('loading');
@@ -11,34 +11,18 @@ export function CompleteSignup() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const hasRun = useRef(false);
-  const { isAuthenticated, authLoading } = useAuth();
+  const { isAuthenticated } = useAuth();
 
-  // FIX #1: This effect now derives the UI state from the auth state.
-  // When the user is authenticated, it shows the success screen.
+  // This single useEffect now handles the entire one-time process.
   useEffect(() => {
-    // If we are already authenticated and no longer loading, show the success screen.
-    if (isAuthenticated && !authLoading) {
-      setStatus('success');
+    // If the user is already authenticated (e.g., on a refresh), navigate them away immediately.
+    if (isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+      return;
     }
-  }, [isAuthenticated, authLoading]);
 
-  // This effect handles the final redirect after the success message is shown.
-  useEffect(() => {
-    if (status === 'success') {
-      // We add a small delay so the user can see the "Success!" message.
-      const timer = setTimeout(() => {
-        navigate('/dashboard', { replace: true });
-      }, 1500); // 1.5-second delay before redirect
-
-      return () => clearTimeout(timer);
-    }
-  }, [status, navigate]);
-
-  // This effect runs the one-time signup process.
-  useEffect(() => {
-    // FIX #2: We add a guard here. If the user is already authenticated,
-    // we don't need to run this process at all. This prevents duplicate emails on refresh.
-    if (isAuthenticated || hasRun.current) {
+    // Prevent the process from running more than once.
+    if (hasRun.current) {
       return;
     }
     hasRun.current = true;
@@ -92,15 +76,16 @@ export function CompleteSignup() {
     
         if (updateError) throw updateError;
     
-        if (updateError) throw updateError;
-
-        // Send the welcome email (fire-and-forget)
+        // Temporarily commented out for testing
         // sendWelcomeEmail(email, fullName, companyName).catch(emailError => {
         //   console.error('Welcome email failed to send:', emailError);
         // });
         
-        // The process is done. We don't set status here anymore.
-        // The effects above will now take over when the auth state changes.
+        // THE FIX: Set success and command the redirect from here.
+        setStatus('success');
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 1500); // 1.5-second delay for the user to see the success message
     
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An unknown error occurred.');
