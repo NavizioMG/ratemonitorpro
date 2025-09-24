@@ -1,10 +1,11 @@
+// src/pages/Dashboard.tsx
 import { useState, useEffect, useMemo } from 'react';
-import { TrendingUp, Users, Bell, Plus } from 'lucide-react';
+import { TrendingUp, Users, Bell, Plus, DollarSign } from 'lucide-react'; 
 import { Link } from 'react-router-dom';
 import { useClients } from '../hooks/useClients';
 import { useRateHistory } from '../hooks/useRateHistory';
 import { useRateCalculations } from '../hooks/useRateCalculations';
-import { CurrentRateCard } from '../components/CurrentRateCard';
+import { CurrentRateCard } from '../components/dashboard/CurrentRateCard';
 import { StatCard } from '../components/dashboard/StatCard';
 import { QuickActionCard } from '../components/dashboard/QuickActionCard';
 import { RecentAlertsTable } from '../components/dashboard/RecentAlertsTable';
@@ -13,7 +14,6 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 
 export function Dashboard() {
-  // 1. More efficient data fetching from context
   const { user, profile } = useAuth();
   const { clients } = useClients();
   const { rateHistory } = useRateHistory();
@@ -23,7 +23,6 @@ export function Dashboard() {
   
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
-  // 2. Permanent fix for the Welcome Modal logic
   useEffect(() => {
     if (profile && !profile.has_seen_welcome) {
       setShowWelcomeModal(true);
@@ -40,21 +39,20 @@ export function Dashboard() {
     }
   };
 
-  // 3. Memoized calculations for better performance
   const stats = useMemo(() => [
     { 
       name: 'Potential Monthly Savings', 
       value: `$${totalSavings.toFixed(2)}`,
-      icon: DollarSign,
+      icon: DollarSign, // This line was causing the error without the import
       change: `${clientsAboveRate} clients above market rate`,
-      changeType: 'neutral'
+      changeType: 'neutral' as const
     },
     { 
       name: 'Total Clients',
       value: clients.length,
       icon: Users,
       change: `${clientsAtTargetRate} at target rate`,
-      changeType: 'info'
+      changeType: 'info' as const
     }
   ], [totalSavings, clientsAboveRate, clients.length, clientsAtTargetRate]);
 
@@ -103,7 +101,6 @@ export function Dashboard() {
         </div>
       </div>
 
-      {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
         <CurrentRateCard />
         {stats.map((stat) => (
@@ -111,19 +108,16 @@ export function Dashboard() {
         ))}
       </div>
 
-      {/* Quick Actions */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
         {quickActions.map((action) => (
           <QuickActionCard key={action.title} {...action} />
         ))}
       </div>
 
-      {/* Recent Rate Alerts */}
       <div className="mt-8">
         <RecentAlertsTable alerts={recentAlerts} rateStatuses={rateStatuses} />
       </div>
       
-      {/* Welcome Modal */}
       {showWelcomeModal && (
         <WelcomeModal onClose={handleModalClose} />
       )}
