@@ -4,127 +4,89 @@
 - Node.js 20.x
 - npm 9.x
 - Supabase CLI
-- Netlify CLI (optional)
+- Netlify CLI
 
 ## Environment Setup
-1. Copy environment variables:
+1. Copy the example environment file:
    ```bash
    cp .env.example .env
-   ```
 
-2. Update environment variables with actual values
+   Update the .env file with your actual development values.
 
-## Database Deployment
-1. Push database migrations:
-   ```bash
-   supabase db push
-   ```
+Ensure all production secrets (e.g., STRIPE_SECRET_KEY_LIVE, APP_URL) are set in your Supabase project and Netlify site settings.
 
-2. Verify RLS policies:
-   ```bash
-   supabase db verify-policies
-   ```
+Database Deployment
+Apply the latest database migrations:
 
-3. Add missing columns (if needed):
-   ```sql
-   ALTER TABLE profiles ADD COLUMN ghl_rmp_contact_id TEXT;
-   ```
+Bash
 
-## Edge Functions Deployment
-1. Deploy all functions:
-   ```bash
-   supabase functions deploy fetch-rates
-   supabase functions deploy stripe-webhook
-   supabase functions deploy create-checkout-session
-   supabase functions deploy get-subscription
-   supabase functions deploy cancel-subscription
-   supabase functions deploy get-billing-history
-   supabase functions deploy add-client
-   supabase functions deploy create-ghl-subaccount
-   supabase functions deploy sync-ghl-client
-   supabase functions deploy sync-ghl-contact
-   supabase functions deploy update-ghl-contact
-   supabase functions deploy update-subaccount
-   ```
+supabase db push
+Add the has_seen_welcome column for the one-time welcome modal (if not already in migrations):
 
-## Frontend Deployment
-1. Build the application:
-   ```bash
-   npm run build
-   ```
+SQL
 
-2. Deploy to Netlify:
-   ```bash
-   netlify deploy --prod
-   ```
+ALTER TABLE profiles ADD COLUMN has_seen_welcome BOOLEAN DEFAULT false;
+Edge Functions Deployment
+Deploy all necessary server-side functions.
 
-## Post-Deployment
-1. Verify all environment variables
-2. Test authentication flow
-3. Test signup → payment → dashboard flow
-4. Verify rate monitoring (MortgageNewsDaily scraping)
-5. Test subscription system
-6. Check notifications
-7. Test GHL integrations
-8. Verify database connections
+Core Functions:
 
-## Common Issues & Fixes
+Bash
 
-### Authentication Redirect Loop
-- **Symptom**: Users get stuck on welcome screen after payment
-- **Cause**: AuthContext not syncing with Supabase auth events
-- **Fix**: Increase auth sync timeout in CompleteSignup.tsx to 5+ seconds
+supabase functions deploy create-checkout-session
+supabase functions deploy verify-checkout-session
+supabase functions deploy stripe-webhook
+supabase functions deploy fetch-rates
+Scheduled Functions (if applicable):
 
-### Stripe Redirect Error
-- **Symptom**: 404 after payment completion
-- **Fix**: Ensure success URL in create-checkout-session uses `/complete-signup` not `/auth/complete-signup`
+Bash
 
-### Missing GHL Contact ID
-- **Symptom**: Users can't sync clients to their GHL sub-account
-- **Fix**: Verify `ghl_rmp_contact_id` column exists and is populated during signup
+supabase functions deploy scheduled-rates
+Billing/Subscription Functions:
 
-## Rollback Procedures
-1. Database:
-   ```bash
-   supabase db reset
-   supabase db push
-   ```
+Bash
 
-2. Frontend:
-   ```bash
-   netlify deploy --prod --dir=dist
-   ```
+supabase functions deploy get-subscription
+supabase functions deploy cancel-subscription
+supabase functions deploy get-billing-history
+Frontend Deployment
+Build the application for production:
 
-3. Edge Functions:
-   ```bash
-   # Rollback specific function
-   supabase functions deploy [function-name] --import-map import_map.json
-   ```
+Bash
 
-## Production Cleanup
-Before going live, clean all test data:
-```sql
--- Clean test users and related data
+npm run build
+Deploy the contents of the dist folder to Netlify:
+
+Bash
+
+netlify deploy --prod
+Post-Deployment Checklist
+Verify Environment Variables: Double-check that all secrets are correctly set for both your Supabase functions and your Netlify frontend.
+
+Test Authentication: Ensure you can log in and log out successfully.
+
+Test the Full Signup Flow: This is the most critical test.
+
+Create a new account.
+
+Complete a payment through the Stripe checkout.
+
+Verify you are redirected to the welcome screen and then automatically to the dashboard.
+
+Check that the welcome modal appears only once.
+
+Confirm the new user was created in Supabase Auth and a corresponding profile was created in the profiles table.
+
+Verify Rate Monitoring: Check that the CurrentRateCard on the dashboard displays the latest rates.
+
+Production Cleanup
+Before launching, run this script in your Supabase SQL Editor to remove all test data.
+
+SQL
+
+-- Clean test users and all related data
 DELETE FROM notifications WHERE user_id IN (SELECT id FROM auth.users WHERE email LIKE '%@test.com');
-DELETE FROM ghl_subaccounts WHERE user_id IN (SELECT id FROM auth.users WHERE email LIKE '%@test.com');
 DELETE FROM mortgages WHERE client_id IN (SELECT id FROM clients WHERE broker_id IN (SELECT id FROM auth.users WHERE email LIKE '%@test.com'));
 DELETE FROM clients WHERE broker_id IN (SELECT id FROM auth.users WHERE email LIKE '%@test.com');
 DELETE FROM profiles WHERE id IN (SELECT id FROM auth.users WHERE email LIKE '%@test.com');
 DELETE FROM auth.users WHERE email LIKE '%@test.com';
-```
-
-## Monitoring
-- Set up Supabase monitoring
-- Configure error tracking
-- Set up performance monitoring
-- Enable audit logging
-- Monitor GHL API quotas
-
-## Security Checklist
-- [ ] SSL certificates
-- [ ] Environment variables
-- [ ] API keys rotation
-- [ ] Database backups
-- [ ] RLS policies
-- [ ] GHL webhook security
-- [ ] Stripe webhook verification

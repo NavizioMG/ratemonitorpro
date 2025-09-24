@@ -11,15 +11,14 @@ Rate Monitor Pro (RMP) is a SaaS web app for mortgage brokers and loan officers.
 
 ## 2️⃣ Core Features
 
-* ✅ Real-time rate fetching
+* ✅ Real-time rate fetching from trusted sources
 * ✅ Client management dashboard
-* ✅ Target rate tracking
-* ✅ Automated notifications (email/SMS) via Go High Level
-* ✅ Secure Stripe billing (flat + metered)
-* ✅ Role-based access, secure auth (Supabase)
-* ✅ Supabase Edge Functions + Netlify Functions
-* ✅ GHL sub-account creation and management
-* ✅ Complete signup workflow with payment integration
+* ✅ Target rate tracking per client
+* ✅ Automated notifications (email/SMS)
+* ✅ Secure, server-side Stripe billing
+* ✅ Role-based access and secure authentication (Supabase)
+* ✅ Supabase Edge Functions for scalable backend logic
+* ✅ Robust signup workflow with server-side payment processing
 
 ---
 
@@ -27,190 +26,63 @@ Rate Monitor Pro (RMP) is a SaaS web app for mortgage brokers and loan officers.
 
 **Frontend:** Vite + React + TypeScript + Tailwind + Lucide Icons
 **Backend:** Supabase (PostgreSQL, Auth, RLS, Realtime) + Edge Functions
-**APIs:** MortgageNewsDaily (rate scraping), Stripe (billing), GHL API (CRM automation)
+**APIs:** FRED (for rate data), Stripe (billing)
 **Hosting:** Netlify + Supabase
 
 ---
 
 ## 4️⃣ Project Structure
 
-```
+Our component structure is organized for clarity and scalability.
+
 src/
-├── components/      # UI components (auth, clients, deals, layout)
-├── pages/           # Routes (Dashboard, Billing, Docs, Auth)
-├── contexts/        # Global contexts (AuthContext)
-├── hooks/           # React hooks (useClients, useRateHistory, etc.)
-├── services/        # Stripe, GHL, FRED logic
-├── config/          # Env config files
-├── lib/             # Supabase setup, utilities
-├── types/           # TypeScript models
-├── utils/           # Helpers, test utilities
-api/supabase/functions/ # Edge Functions
-├── add-client/              # Create contacts in RMP location
-├── create-ghl-subaccount/   # Create user sub-accounts
-├── create-checkout-session/ # Stripe payment processing
-├── fetch-rates/             # Rate monitoring
-├── stripe-webhook/          # Payment webhooks
-└── [other functions]/       # Additional integrations
-```
-
----
-
-## 5️⃣ Current Signup Workflow (E2E)
-
-### Working Flow (As of Latest Updates):
-1. **User visits landing page** → clicks "Get Started"
-2. **Fills signup form** → data stored in localStorage
-3. **Redirected to Stripe** → completes payment
-4. **Stripe redirects to** `/complete-signup?success=true`
-5. **CompleteSignup component:**
-   - Attempts sign-in (fails expected for new users)
-   - Creates new Supabase auth user
-   - Signs in the new user
-   - Updates user profile
-   - Creates welcome notification
-   - **Creates contact in RMP location** (stores contact ID)
-   - **Creates GHL sub-account** for user
-   - Waits for AuthContext to sync (5-second timeout)
-   - Shows welcome screen
-   - Redirects to dashboard
-
-### Critical Timing Fix:
-The signup flow requires proper auth context synchronization. The component waits up to 5 seconds for the AuthContext to recognize the authenticated state before allowing redirect to dashboard.
-
----
-
-## 6️⃣ Environment Variables
-
-```
-# Supabase
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-
-# APIs
-VITE_FRED_API_KEY=
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-STRIPE_PRICE_ID=
-
-# GHL Integration  
-GHL_RMP_API_KEY=         # For creating contacts in RMP location
-RMP_LOCATION_ID=         # Your main RMP location ID
-GHL_AGENCY_API_KEY=      # For creating user sub-accounts
-GHL_COMPANY_ID=          # Your GHL company/agency ID
-
-# App Config
-APP_URL=https://ratemonitorpro.com
-```
-
----
-
-## 7️⃣ Database Schema Updates
-
-Recent additions to support GHL integration:
-
-```sql
--- Profiles table (add missing column)
-ALTER TABLE profiles ADD COLUMN ghl_rmp_contact_id TEXT;
-
--- GHL Sub-accounts tracking
-CREATE TABLE ghl_subaccounts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES auth.users(id) NOT NULL,
-  ghl_location_id TEXT NOT NULL,
-  ghl_agency_api_key TEXT,
-  company_name TEXT,
-  email TEXT,
-  phone TEXT,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
-```
-
----
-
-## 8️⃣ Deployment
-
-**Local Development:**
-```bash
-git clone <repo>
-npm install
-cp .env.example .env
-npm run dev
-```
-
-**Database:**
-```bash
-supabase db push
-supabase db verify-policies
-```
-
-**Edge Functions:**
-```bash
-supabase functions deploy add-client
-supabase functions deploy create-ghl-subaccount
-supabase functions deploy create-checkout-session
-supabase functions deploy stripe-webhook
-# ... deploy other functions as needed
-```
-
-**Frontend:**
-```bash
-npm run build
-netlify deploy --prod
-```
+├── components/
+│   ├── ui/         # Generic, reusable UI elements (Button, Modal, etc.)
+│   ├── layout/     # Structural components (DashboardLayout, Footer, etc.)
+│   ├── auth/       # Authentication-related components
+│   ├── clients/    # Components for the client management feature
+│   └── dashboard/  # Components specific to the main dashboard
+├── pages/          # Top-level route components
+├── contexts/       # Global state management (AuthContext)
+├── hooks/          # Reusable React hooks
+├── services/       # API clients (Stripe, Email, etc.)
+└── lib/            # Core libraries (Supabase client, utils)
 
 ---
 
 ## 9️⃣ Common Issues & Solutions
 
-### Signup Flow Problems:
-- **Infinite "Finalizing" screen**: AuthContext sync timeout too short
-- **404 after payment**: Wrong Stripe success URL
-- **Redirect to login**: PrivateRoute timing issue
+### GHL Integration (Post-MVP):
+- **Missing contact sync**: Check `ghl_rmp_contact_id` column exists.
+- **Sub-account creation fails**: Verify column names in the database.
 
-### GHL Integration:
-- **Missing contact sync**: Check `ghl_rmp_contact_id` column exists
-- **Sub-account creation fails**: Verify column names in database
-
-See `TROUBLESHOOTING.md` for detailed solutions.
+See `TROUBLESHOOTING.md` for more detailed solutions.
 
 ---
 
 ## 🔟 Production Checklist
 
 Before going live:
-1. **Clean test data**: Use SQL script to remove all `%@test.com` users
-2. **Switch to live Stripe**: Update environment variables
-3. **Verify GHL quotas**: Check API limits
-4. **Test complete signup flow**: End-to-end verification
-5. **Monitor error tracking**: Set up logging
-6. **Database backups**: Verify backup schedule
+1.  **Clean test data**: Use the SQL script in `DEPLOYMENT.md` to remove test users.
+2.  **Switch to live Stripe keys**: Update environment variables in Supabase and Netlify.
+3.  **Verify API quotas**: Check limits for any external services.
+4.  **Test complete signup flow**: Perform an end-to-end test with a real payment method.
+5.  **Monitor error tracking**: Ensure logging and monitoring services are active.
+6.  **Database backups**: Confirm the backup schedule is enabled in Supabase.
 
 ---
 
 ## 📋 Next Development Priorities
 
-1. **Dashboard client management** - Add/edit clients functionality
-2. **Rate monitoring setup** - Configure FRED API integration
-3. **GHL client sync** - Sync user clients to their sub-accounts  
-4. **Notification system** - Rate alerts via GHL workflows
-5. **Analytics dashboard** - Portfolio performance metrics
-
----
-
-## 🔒 License
-
-MIT License — see `LICENSE` file.
-
-**Maintainer:** Justin Jacobs
-**PM:** ChatGPT AI co-pilot 🚀
+1.  **Finalize Notification System** - Implement and test target rate alert emails for brokers and clients.
+2.  **Build Out Settings Page** - Add user profile, password, and notification preference management.
+3.  **Remove GoHighLevel Integration** - Systematically refactor the codebase to remove all GHL-related logic and database columns.
+4.  **Analytics Dashboard** - Enhance the dashboard with more detailed portfolio performance metrics.
 
 ---
 
 ## 📚 Additional Documentation
 
-- `DEPLOYMENT.md` - Complete deployment guide
-- `TROUBLESHOOTING.md` - Common issues and solutions  
-- `DOCUMENTATION.md` - Comprehensive technical documentation
+-   `DEPLOYMENT.md` - A complete guide to deploying the application.
+-   `TROUBLESHOOTING.md` - Solutions for common development and deployment issues.
+-   `DOCUMENTATION.md` - Comprehensive technical documentation.

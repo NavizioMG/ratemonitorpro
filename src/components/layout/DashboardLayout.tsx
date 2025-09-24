@@ -1,4 +1,4 @@
-// src/components/layout/DashboardLayout.tsx (Updated)
+// src/components/layout/DashboardLayout.tsx (Session Timeout Disabled)
 import { ReactNode, useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
@@ -16,8 +16,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { NotificationBell } from './NotificationBell';
-import { useSessionTimeout } from '../../hooks/useSessionTimeout';
-import { SessionTimeoutModal } from '../ui/SessionTimeoutModal';
+// import { useSessionTimeout } from '../../hooks/useSessionTimeout';
+// import { SessionTimeoutModal } from '../ui/SessionTimeoutModal';
 
 interface Props {
   children: ReactNode;
@@ -36,13 +36,13 @@ export function DashboardLayout({ children }: Props) {
   const location = useLocation();
   const { session, signOut } = useAuth();
 
-  // 🚀 NEW: Session timeout integration
-  const { 
-    showWarning, 
-    timeRemaining, 
-    handleExtendSession, 
-    handleSessionExpired 
-  } = useSessionTimeout();
+  // 🚫 TEMPORARILY DISABLED: Session timeout integration
+  // const { 
+  //   showWarning, 
+  //   timeRemaining, 
+  //   handleExtendSession, 
+  //   handleSessionExpired 
+  // } = useSessionTimeout();
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -57,13 +57,13 @@ export function DashboardLayout({ children }: Props) {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* 🚀 NEW: Session timeout modal */}
-      <SessionTimeoutModal
+      {/* 🚫 TEMPORARILY DISABLED: Session timeout modal */}
+      {/* <SessionTimeoutModal
         isVisible={showWarning}
         timeRemaining={timeRemaining}
         onExtendSession={handleExtendSession}
         onLogout={handleSessionExpired}
-      />
+      /> */}
 
       {/* Mobile sidebar */}
       <div className={`fixed inset-0 z-50 lg:hidden ${sidebarOpen ? 'block' : 'hidden'}`}>
