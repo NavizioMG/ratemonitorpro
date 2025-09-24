@@ -92,11 +92,13 @@ export function CompleteSignup() {
     
         if (updateError) throw updateError;
     
+        if (updateError) throw updateError;
+
         // Send the welcome email (fire-and-forget)
-      /*  sendWelcomeEmail(email, fullName, companyName).catch(emailError => {
-          console.error('Welcome email failed to send:', emailError); */
-        });
-    
+        // sendWelcomeEmail(email, fullName, companyName).catch(emailError => {
+        //   console.error('Welcome email failed to send:', emailError);
+        // });
+        
         // The process is done. We don't set status here anymore.
         // The effects above will now take over when the auth state changes.
     
