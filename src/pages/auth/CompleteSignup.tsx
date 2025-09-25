@@ -70,7 +70,7 @@ export function CompleteSignup() {
         
         const { error: profileError } = await supabase.from('profiles').upsert({
           id: userId, full_name: fullName, company_name: companyName, phone, timezone
-        }, { onConflict: 'id' }); // ✅ TYPO FIXED HERE
+        }, { onConflict: 'id' });
         if (profileError) throw profileError;
 
         setStatus('success');
