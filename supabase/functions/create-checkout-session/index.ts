@@ -1,6 +1,5 @@
-// supabase/functions/create-checkout-session/index.ts (Updated)
-import { serve } from "https://deno.land/std@0.224.0/http/server.ts"; // <-- Updated
-import Stripe from "https://esm.sh/stripe@15.8.0?target=deno"; // <-- Updated
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import Stripe from "https://esm.sh/stripe@15.8.0?target=deno";
 
 const stripeMode = Deno.env.get("STRIPE_MODE") || 'test';
 const stripeKey = stripeMode === 'live'
@@ -10,7 +9,7 @@ const stripePriceId = stripeMode === 'live'
   ? Deno.env.get("STRIPE_PRICE_ID_LIVE")
   : Deno.env.get("STRIPE_PRICE_ID_TEST");
 
-const stripe = new Stripe(stripeKey, { apiVersion: "2024-04-10" }); // <-- Updated
+const stripe = new Stripe(stripeKey, { apiVersion: "2024-04-10" });
 const corsHeaders = { 
   "Access-Control-Allow-Origin": "*", 
   "Access-Control-Allow-Methods": "POST, OPTIONS", 
