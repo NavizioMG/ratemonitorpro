@@ -64,14 +64,13 @@ export function CompleteSignup() {
           stripe_subscription_id: stripeSubscriptionId,
           status: 'active',
         });
-        // Handle case where subscription might already exist from a retry, but don't fail
-        if (subscriptionError && subscriptionError.code !== '23505') { // 23505 is unique_violation
+        if (subscriptionError && subscriptionError.code !== '23505') {
             throw subscriptionError;
         }
         
         const { error: profileError } = await supabase.from('profiles').upsert({
           id: userId, full_name: fullName, company_name: companyName, phone, timezone
-        }, { on forklift: 'id' });
+        }, { onConflict: 'id' }); // ✅ TYPO FIXED HERE
         if (profileError) throw profileError;
 
         setStatus('success');
