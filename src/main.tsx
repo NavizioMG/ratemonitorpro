@@ -35,6 +35,7 @@ import { SystemStatus } from './pages/SystemStatus';
 import { Security } from './pages/Security';
 import { CookiePolicy } from './pages/CookiePolicy';
 import { NotFound } from './pages/NotFound';
+import { PostSignupBilling } from './pages/PostSignupBilling'; // Add this import
 
 // Define the router configuration
 const router = createBrowserRouter(
@@ -56,9 +57,11 @@ const router = createBrowserRouter(
         { path: '/guides', element: <Guides /> },
         { path: '/status', element: <SystemStatus /> },
         { path: '/security', element: <Security /> },
+        { path: '/post-signup-billing', element: <PostSignupBilling /> },
         { path: '/cookies', element: <CookiePolicy /> },
         { path: '/auth', element: <PublicRoute><Auth /></PublicRoute> },
         { path: '/complete-signup', element: <CompleteSignup /> },
+        
 
         // Protected routes
         {

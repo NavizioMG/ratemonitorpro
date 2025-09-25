@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@15.8.0?target=deno";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const stripeMode = Deno.env.get("STRIPE_MODE") || 'test';
 const stripeKey = stripeMode === 'live'
@@ -69,8 +70,8 @@ serve(async (req) => {
           timezone: userData.timezone || 'America/New_York'
         })
       },
-      success_url: `${Deno.env.get("APP_URL")}/complete-signup?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${Deno.env.get("APP_URL")}/auth?canceled=true`,
+      success_url: `${Deno.env.get("APP_URL")}/dashboard?payment=success`,
+      cancel_url: `${Deno.env.get("APP_URL")}/billing?canceled=true`,
       // Optional: Customize the checkout experience
       allow_promotion_codes: true,
       billing_address_collection: 'required',

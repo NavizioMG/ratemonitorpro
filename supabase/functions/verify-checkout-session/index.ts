@@ -62,10 +62,39 @@ serve(async (req) => {
 
     console.log('Stripe IDs:', { stripeCustomerId, stripeSubscriptionId, stripePriceId });
 
-    // 3. Create the user account in Supabase (server-side with admin privileges)
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email: userData.email,
-      email_confirm: true, // Skip email verification
+    // 3. Create or get existing user account
+    let userId;
+    
+    // First, try to find existing user
+    const { data: existingUsers } = await supabase.auth.admin.listUsers();
+    const existingUser = existingUsers?.users?.find(u => u.email === userData.email);
+    
+    if (existingUser) {
+      console.log('Using existing user:', existingUser.id);
+      userId = existingUser.id;
+    } else {
+      // Create new user
+      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+        email: userData.email,
+        email_confirm: true,
+        user_metadata: {
+          full_name: userData.fullName,
+          company_name: userData.companyName,
+          phone: userData.phone,
+          timezone: userData.timezone,
+          stripe_customer_id: stripeCustomerId
+        }
+      });
+
+      if (authError) {
+        console.error('User creation error:', authError);
+        throw authError;
+      }
+
+      if (!authData.user) throw new Error('Failed to create user');
+      userId = authData.user.id;
+      console.log('Created new user:', userId);
+    } email verification
       user_metadata: {
         full_name: userData.fullName,
         company_name: userData.companyName,
@@ -146,20 +175,26 @@ serve(async (req) => {
       // Don't throw - subscription can be synced later via webhook
     }
 
-    // 6. Generate a session token for auto-login
+    // 7. Generate a session token for auto-login
     const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email: userData.email,
     });
 
-    if (sessionError) throw sessionError;
+    if (sessionError) {
+      console.error('Session generation error:', sessionError);
+      throw sessionError;
+    }
+
+    console.log('Generated session tokens for user:', authData.user.id);
+    console.log('Session data structure:', JSON.stringify(sessionData, null, 2));
 
     return new Response(
       JSON.stringify({ 
         success: true,
         userId: authData.user.id,
-        accessToken: sessionData.properties.access_token,
-        refreshToken: sessionData.properties.refresh_token
+        accessToken: sessionData.properties?.access_token,
+        refreshToken: sessionData.properties?.refresh_token
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -1,219 +1,196 @@
-//src/components/auth/SignUpForm.tsx
 import { useState } from 'react';
-import { UserPlus, AlertCircle } from 'lucide-react';
-import { debug, Category } from '../../lib/debug';
-import { createCheckoutSession } from '../../services/stripe';
-import { getAppUrl } from '../../services/stripe'; // 👈 only if it's not already imported
+import { supabase } from '../../lib/supabase';
+
+interface SignupFormData {
+  email: string;
+  password: string;
+  fullName: string;
+  companyName: string;
+  phone: string;
+  timezone: string;
+}
 
 export function SignUpForm() {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<SignupFormData>({
     email: '',
+    password: '',
     fullName: '',
     companyName: '',
     phone: '',
-    password: '',
-    timezone: 'America/Denver' // Default
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
   });
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const timezones = [
-    'America/New_York',
-    'America/Chicago',
-    'America/Denver',
-    'America/Los_Angeles',
-    'America/Anchorage',
-    'Pacific/Honolulu'
-    // Add more via Intl.supportedValuesOf('timeZone') later
-  ];
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
-
-    if (!formData.email || !formData.fullName || !formData.companyName || !formData.password || !formData.timezone) {
-      setError('Please fill in all required fields');
-      return;
-    }
-
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(formData.email)) {
-      setError('Please enter a valid email address');
-      return;
-    }
-
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
-      return;
-    }
+    setLoading(true);
+    setMessage(null);
 
     try {
-      setLoading(true);
-      debug.logInfo(Category.AUTH, 'Starting payment process', { email: formData.email });
+      // Standard Supabase signup
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          data: {
+            full_name: formData.fullName,
+            company_name: formData.companyName,
+            phone: formData.phone,
+            timezone: formData.timezone
+          },
+          emailRedirectTo: `${window.location.origin}/post-signup-billing`
+        }
+      });
 
-      localStorage.setItem('signupEmail', formData.email);
-      localStorage.setItem('signupFullName', formData.fullName);
-      localStorage.setItem('signupCompanyName', formData.companyName);
-      localStorage.setItem('signupPhone', formData.phone || '');
-      localStorage.setItem('signupPassword', formData.password);
-      localStorage.setItem('signupTimezone', formData.timezone);
+      if (error) throw error;
 
-      await createCheckoutSession(formData);
-    } catch (err) {
-      debug.logError(Category.AUTH, 'Payment process failed', {}, err);
-      setError(err instanceof Error ? err.message : 'Failed to start payment');
+      if (data.user && !data.session) {
+        // Email confirmation required
+        setMessage({
+          type: 'success',
+          text: 'Please check your email and click the confirmation link to complete your registration.'
+        });
+      } else if (data.session) {
+        // User signed up and logged in immediately
+        setMessage({
+          type: 'success', 
+          text: 'Account created successfully! Redirecting to billing...'
+        });
+        setTimeout(() => window.location.href = '/billing', 2000);
+      }
+
+    } catch (error) {
+      console.error('Signup error:', error);
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Signup failed. Please try again.'
+      });
+    } finally {
       setLoading(false);
     }
   };
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({
+      ...prev,
+      [e.target.name]: e.target.value
+    }));
+  };
+
   return (
-    <div className="w-full max-w-md">
-      <form onSubmit={handleSubmit} className="bg-white shadow-lg rounded-lg px-8 pt-6 pb-8 mb-4">
-        <div className="flex items-center justify-center mb-6">
-          <UserPlus className="w-8 h-8 text-primary" />
-          <h2 className="ml-2 text-2xl font-bold text-primary">Create Account</h2>
+    <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8">
+      <div className="text-center mb-6">
+        <div className="bg-primary text-white rounded-full h-16 w-16 flex items-center justify-center text-2xl font-bold shadow-md mx-auto mb-4">
+          RMP
         </div>
+        <h2 className="text-2xl font-bold text-gray-900">
+          Join <span className="text-primary">Rate Monitor Pro</span>
+        </h2>
+        <p className="text-gray-600 mt-2">Start your 14-day free trial</p>
+      </div>
 
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
-            <div className="flex items-start">
-              <AlertCircle className="h-5 w-5 text-red-400 mt-0.5 mr-2" />
-              <div className="flex-1">
-                <p className="text-sm text-red-800">{error}</p>
-              </div>
-            </div>
-          </div>
-        )}
+      {message && (
+        <div className={`p-4 rounded-lg mb-4 ${
+          message.type === 'success' ? 'bg-green-50 text-green-800' : 'bg-red-50 text-red-800'
+        }`}>
+          {message.text}
+        </div>
+      )}
 
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="fullName">
-            Full Name <span className="text-red-500">*</span>
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Full Name *
           </label>
           <input
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-primary"
-            id="fullName"
             type="text"
+            name="fullName"
             value={formData.fullName}
-            onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
+            onChange={handleChange}
             required
-            disabled={loading}
-            autoComplete="name"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            placeholder="John Doe"
           />
         </div>
 
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="companyName">
-            Company Name <span className="text-red-500">*</span>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Company Name *
           </label>
           <input
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-primary"
-            id="companyName"
             type="text"
+            name="companyName"
             value={formData.companyName}
-            onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
+            onChange={handleChange}
             required
-            disabled={loading}
-            autoComplete="organization"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            placeholder="ABC Mortgage Co"
           />
         </div>
 
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="phone">
-            Phone Number
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Email Address *
           </label>
           <input
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-primary"
-            id="phone"
-            type="tel"
-            value={formData.phone}
-            onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-            disabled={loading}
-            autoComplete="tel"
-          />
-        </div>
-
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="email">
-            Email <span className="text-red-500">*</span>
-          </label>
-          <input
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-primary"
-            id="email"
             type="email"
+            name="email"
             value={formData.email}
-            onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+            onChange={handleChange}
             required
-            disabled={loading}
-            autoComplete="email"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            placeholder="john@company.com"
           />
         </div>
 
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="password">
-            Password <span className="text-red-500">*</span>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Password *
           </label>
           <input
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-primary"
-            id="password"
             type="password"
+            name="password"
             value={formData.password}
-            onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+            onChange={handleChange}
             required
-            disabled={loading}
-            autoComplete="new-password"
+            minLength={8}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            placeholder="Minimum 8 characters"
           />
         </div>
 
-        <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2" htmlFor="timezone">
-            Timezone <span className="text-red-500">*</span>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Phone (Optional)
           </label>
-          <select
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline focus:border-primary"
-            id="timezone"
-            value={formData.timezone}
-            onChange={(e) => setFormData(prev => ({ ...prev, timezone: e.target.value }))}
-            required
-            disabled={loading}
-          >
-            {timezones.map((tz) => (
-              <option key={tz} value={tz}>
-                {tz}
-              </option>
-            ))}
-          </select>
+          <input
+            type="tel"
+            name="phone"
+            value={formData.phone}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            placeholder="(555) 123-4567"
+          />
         </div>
 
-        <div className="flex items-center justify-between">
-          <button
-            className="w-full flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-dark focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary disabled:opacity-50 disabled:cursor-not-allowed"
-            type="submit"
-            disabled={loading}
-          >
-            {loading ? (
-              <div className="flex items-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Processing Payment...
-              </div>
-            ) : (
-              'Continue to Payment'
-            )}
-          </button>
-        </div>
-
-        <div className="mt-4 text-center">
-          <p className="text-sm text-gray-500">
-            By signing up, you agree to our{' '}
-            <a href="/terms" className="text-primary hover:text-primary-dark">
-              Terms of Service
-            </a>{' '}
-            and{' '}
-            <a href="/privacy" className="text-primary hover:text-primary-dark">
-              Privacy Policy
-            </a>
-          </p>
-        </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full bg-primary text-white py-2 px-4 rounded-lg hover:bg-primary-dark disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+        >
+          {loading ? 'Creating Account...' : 'Start Free Trial'}
+        </button>
       </form>
+
+      <div className="mt-6 text-center">
+        <p className="text-sm text-gray-600">
+          Already have an account?{' '}
+          <a href="/auth?mode=signin" className="text-primary hover:underline font-medium">
+            Sign in
+          </a>
+        </p>
+      </div>
     </div>
   );
 }
