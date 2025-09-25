@@ -48,8 +48,13 @@ export function RateTracking() {
     );
   }
 
-  const currentRate = rateHistory[0]?.rate_value || 0;
-  const previousRate = rateHistory[1]?.rate_value || 0;
+  // Filter and sort rate history once - MOVED UP HERE
+  const filteredRateHistory = rateHistory
+    .filter(r => r.term_years === selectedTerm)
+    .sort((a, b) => new Date(a.rate_date).getTime() - new Date(b.rate_date).getTime());
+
+  const currentRate = filteredRateHistory[filteredRateHistory.length - 1]?.rate_value || 0;
+  const previousRate = filteredRateHistory[filteredRateHistory.length - 2]?.rate_value || 0;
   const rateChange = currentRate - previousRate;
 
   // Count clients who could benefit from current rates
@@ -191,10 +196,10 @@ export function RateTracking() {
           </div>
         </div>
 
-        {/* Rate Chart - Responsive */}
+        {/* Rate Chart - Now uses filteredRateHistory with correct chronological order */}
         <div className="mt-6 h-[300px] lg:h-[400px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={rateHistory.filter(r => r.term_years === selectedTerm)}>
+            <LineChart data={filteredRateHistory}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey="rate_date"
