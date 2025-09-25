@@ -1,19 +1,16 @@
-// supabase/functions/create-checkout-session/index.ts
-import { serve } from "https://deno.land/std@0.131.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@14.17.0?target=deno";
+// supabase/functions/create-checkout-session/index.ts (Updated)
+import { serve } from "https://deno.land/std@0.224.0/http/server.ts"; // <-- Updated
+import Stripe from "https://esm.sh/stripe@15.8.0?target=deno"; // <-- Updated
 
-// NEW: Mode-aware logic for keys and price IDs
 const stripeMode = Deno.env.get("STRIPE_MODE") || 'test';
-
 const stripeKey = stripeMode === 'live'
   ? Deno.env.get("STRIPE_SECRET_KEY_LIVE")
   : Deno.env.get("STRIPE_SECRET_KEY_TEST");
-
 const stripePriceId = stripeMode === 'live'
   ? Deno.env.get("STRIPE_PRICE_ID_LIVE")
   : Deno.env.get("STRIPE_PRICE_ID_TEST");
 
-const stripe = new Stripe(stripeKey, { apiVersion: "2022-11-15" });
+const stripe = new Stripe(stripeKey, { apiVersion: "2024-04-10" }); // <-- Updated
 const corsHeaders = { 
   "Access-Control-Allow-Origin": "*", 
   "Access-Control-Allow-Methods": "POST, OPTIONS", 
@@ -24,7 +21,6 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders });
 
   try {
-    // Check that the correct keys for the current mode are present
     if (!stripeKey) throw new Error(`STRIPE_SECRET_KEY_${stripeMode.toUpperCase()} is missing`);
     if (!stripePriceId) throw new Error(`STRIPE_PRICE_ID_${stripeMode.toUpperCase()} is missing`);
     
@@ -35,14 +31,11 @@ serve(async (req) => {
       payment_method_types: ["card"],
       mode: "subscription",
       customer_email: email,
-      line_items: [{ 
-        price: stripePriceId, // Use the mode-aware price ID
-        quantity: 1 
-      }],
+      line_items: [{ price: stripePriceId, quantity: 1 }],
       metadata: {
         userData: JSON.stringify(userData || {})
       },
-      success_url: `${Deno.env.get("APP_URL")}/complete-signup?success=true&session_id={CHECKOUT_SESSION_ID}`,
+      success_url: `${Deno.env.get("APP_URL")}/complete-signup?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${Deno.env.get("APP_URL")}/auth?canceled=true`,
     });
 

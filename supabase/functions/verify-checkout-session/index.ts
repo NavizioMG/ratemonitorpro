@@ -1,15 +1,14 @@
-// supabase/functions/verify-checkout-session/index.ts (Updated)
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import Stripe from 'https://esm.sh/stripe@14.17.0?target=deno';
+// supabase/functions/verify-checkout-session/index.ts (Updated & Stabilized)
+import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
+import Stripe from 'https://esm.sh/stripe@15.8.0?target=deno';
 
-// NEW: Mode-aware logic to ensure we use the correct Stripe key
 const stripeMode = Deno.env.get("STRIPE_MODE") || 'test';
 const stripeKey = stripeMode === 'live'
   ? Deno.env.get("STRIPE_SECRET_KEY_LIVE")
   : Deno.env.get("STRIPE_SECRET_KEY_TEST");
 
 const stripe = new Stripe(stripeKey, {
-  apiVersion: '2022-11-15',
+  apiVersion: '2024-04-10',
 });
 
 const corsHeaders = {
@@ -29,7 +28,6 @@ serve(async (req) => {
     const { sessionId } = await req.json();
     if (!sessionId) throw new Error("Session ID is required");
 
-    // Retrieve the checkout session and expand the subscription and customer objects
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ['customer', 'subscription'],
     });
@@ -43,7 +41,6 @@ serve(async (req) => {
       throw new Error('No user data found in session');
     }
 
-    // NEW: Extract the Stripe IDs to pass back to the client
     const stripeCustomerId = session.customer?.id;
     const stripeSubscriptionId = session.subscription?.id;
 
@@ -55,8 +52,8 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         userData,
-        stripeCustomerId,    // <-- Now returning this
-        stripeSubscriptionId // <-- And this
+        stripeCustomerId,
+        stripeSubscriptionId
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

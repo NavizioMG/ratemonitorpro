@@ -13,12 +13,10 @@ export function CompleteSignup() {
   const { isAuthenticated } = useAuth();
 
   useEffect(() => {
-    // If the user is already authenticated (e.g., on a refresh), navigate them away.
     if (isAuthenticated) {
       navigate('/dashboard', { replace: true });
       return;
     }
-
     if (hasRun.current) return;
     hasRun.current = true;
 
@@ -27,7 +25,6 @@ export function CompleteSignup() {
         const sessionId = searchParams.get('session_id');
         if (!sessionId) throw new Error('Session ID is missing from the URL.');
 
-        // 1. Verify payment and get all necessary data from our server-side function
         const sessionResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-checkout-session`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
@@ -38,18 +35,11 @@ export function CompleteSignup() {
           const errorResult = await sessionResponse.json();
           throw new Error(errorResult.error || 'Failed to verify checkout session.');
         }
-
-        // Now expecting stripe IDs along with user data
-        const { userData, stripeCustomerId, stripeSubscriptionId } = await sessionResponse.json();
         
-        if (!userData || !userData.email || !userData.password) {
-          throw new Error('Required signup data is missing from the session.');
-        }
-        if (!stripeCustomerId || !stripeSubscriptionId) {
-            throw new Error('Stripe customer or subscription ID was not returned from the server.');
-        }
+        const { userData, stripeCustomerId, stripeSubscriptionId } = await sessionResponse.json();
+        if (!userData || !userData.email || !userData.password) throw new Error('Required signup data is missing.');
+        if (!stripeCustomerId || !stripeSubscriptionId) throw new Error('Stripe IDs were not returned.');
 
-        // 2. Create or Sign-in the Supabase user
         const { email, fullName, companyName, phone = '', password, timezone } = userData;
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
@@ -68,31 +58,19 @@ export function CompleteSignup() {
 
         if (!userId) throw new Error('Could not determine user ID.');
 
-        // 3. ✨ NEW: Create the subscription record in the database
         const { error: subscriptionError } = await supabase.from('subscriptions').insert({
           user_id: userId,
           stripe_customer_id: stripeCustomerId,
           stripe_subscription_id: stripeSubscriptionId,
-          status: 'active', // Set the initial status
+          status: 'active',
         });
-
-        if (subscriptionError) {
-            // Important: Check for a unique constraint violation, which could happen in a retry scenario
-            if (subscriptionError.code === '23505') { // 'unique_violation'
-                console.warn('Subscription record already exists for this user. Skipping insertion.');
-            } else {
-                throw subscriptionError;
-            }
-        }
+        if (subscriptionError && subscriptionError.code !== '23505') throw subscriptionError;
         
-        // 4. Create or Update the user's profile
         const { error: profileError } = await supabase.from('profiles').upsert({
           id: userId, full_name: fullName, company_name: companyName, phone, timezone
         }, { onConflict: 'id' });
-
         if (profileError) throw profileError;
 
-        // 5. Set success status and trigger the redirect
         setStatus('success');
         setTimeout(() => navigate('/dashboard', { replace: true }), 1500);
 
@@ -106,7 +84,6 @@ export function CompleteSignup() {
   }, [searchParams, navigate, isAuthenticated]);
 
   // --- (Your JSX for loading, error, and success states remains the same) ---
-  
   if (status === 'loading') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary/10 via-white to-primary/5 flex items-center justify-center px-4">
