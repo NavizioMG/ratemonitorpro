@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CheckCircle2, AlertCircle } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-// import { sendWelcomeEmail } from '../../services/email'; // Uncomment when ready
 
 export function CompleteSignup() {
   const [status, setStatus] = useState<'loading' | 'error' | 'success'>('loading');
@@ -13,54 +12,53 @@ export function CompleteSignup() {
   const hasRun = useRef(false);
   const { isAuthenticated } = useAuth();
 
-  // This single useEffect now handles the entire one-time process.
   useEffect(() => {
-    // If the user is already authenticated (e.g., on a refresh), navigate them away immediately.
+    // If the user is already authenticated (e.g., on a refresh), navigate them away.
     if (isAuthenticated) {
       navigate('/dashboard', { replace: true });
       return;
     }
 
-    // Prevent the process from running more than once.
-    if (hasRun.current) {
-      return;
-    }
+    if (hasRun.current) return;
     hasRun.current = true;
 
     const completeSignupProcess = async () => {
       try {
         const sessionId = searchParams.get('session_id');
         if (!sessionId) throw new Error('Session ID is missing from the URL.');
-    
+
+        // 1. Verify payment and get all necessary data from our server-side function
         const sessionResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-checkout-session`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`},
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
           body: JSON.stringify({ sessionId }),
         });
-    
+
         if (!sessionResponse.ok) {
           const errorResult = await sessionResponse.json();
           throw new Error(errorResult.error || 'Failed to verify checkout session.');
         }
-    
-        const { userData } = await sessionResponse.json();
-        if (!userData || !userData.email || !userData.password) {
-          throw new Error('Required signup data is missing. Please sign up again.');
-        }
-    
-        const { email, fullName, companyName, phone = '', password, timezone } = userData;
+
+        // Now expecting stripe IDs along with user data
+        const { userData, stripeCustomerId, stripeSubscriptionId } = await sessionResponse.json();
         
+        if (!userData || !userData.email || !userData.password) {
+          throw new Error('Required signup data is missing from the session.');
+        }
+        if (!stripeCustomerId || !stripeSubscriptionId) {
+            throw new Error('Stripe customer or subscription ID was not returned from the server.');
+        }
+
+        // 2. Create or Sign-in the Supabase user
+        const { email, fullName, companyName, phone = '', password, timezone } = userData;
         const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    
+
         let userId = signInData?.user?.id;
-    
+
         if (signInError?.message === 'Invalid login credentials') {
           const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email,
-            password,
-            options: { data: { full_name: fullName, company_name: companyName, phone, timezone } }
+            email, password, options: { data: { full_name: fullName, company_name: companyName, phone, timezone } }
           });
-    
           if (signUpError) throw signUpError;
           if (!signUpData.user) throw new Error('Failed to create user account.');
           userId = signUpData.user.id;
@@ -69,26 +67,37 @@ export function CompleteSignup() {
         }
 
         if (!userId) throw new Error('Could not determine user ID.');
-    
-        const { error: updateError } = await supabase.from('profiles').upsert({
+
+        // 3. ✨ NEW: Create the subscription record in the database
+        const { error: subscriptionError } = await supabase.from('subscriptions').insert({
+          user_id: userId,
+          stripe_customer_id: stripeCustomerId,
+          stripe_subscription_id: stripeSubscriptionId,
+          status: 'active', // Set the initial status
+        });
+
+        if (subscriptionError) {
+            // Important: Check for a unique constraint violation, which could happen in a retry scenario
+            if (subscriptionError.code === '23505') { // 'unique_violation'
+                console.warn('Subscription record already exists for this user. Skipping insertion.');
+            } else {
+                throw subscriptionError;
+            }
+        }
+        
+        // 4. Create or Update the user's profile
+        const { error: profileError } = await supabase.from('profiles').upsert({
           id: userId, full_name: fullName, company_name: companyName, phone, timezone
         }, { onConflict: 'id' });
-    
-        if (updateError) throw updateError;
-    
-        // Temporarily commented out for testing
-        // sendWelcomeEmail(email, fullName, companyName).catch(emailError => {
-        //   console.error('Welcome email failed to send:', emailError);
-        // });
-        
-        // THE FIX: Set success and command the redirect from here.
+
+        if (profileError) throw profileError;
+
+        // 5. Set success status and trigger the redirect
         setStatus('success');
-        setTimeout(() => {
-          navigate('/dashboard', { replace: true });
-        }, 1500); // 1.5-second delay for the user to see the success message
-    
+        setTimeout(() => navigate('/dashboard', { replace: true }), 1500);
+
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred.');
+        setError(err instanceof Error ? err.message : 'An unknown error occurred during signup.');
         setStatus('error');
       }
     };
@@ -96,7 +105,7 @@ export function CompleteSignup() {
     completeSignupProcess();
   }, [searchParams, navigate, isAuthenticated]);
 
-  // --- JSX for different states (loading, error, success) remains the same ---
+  // --- (Your JSX for loading, error, and success states remains the same) ---
   
   if (status === 'loading') {
     return (
