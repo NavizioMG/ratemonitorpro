@@ -1,4 +1,3 @@
-// supabase/functions/create-checkout-session/index.ts
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@15.8.0?target=deno";
 
@@ -72,8 +71,6 @@ serve(async (req) => {
       },
       success_url: `${Deno.env.get("APP_URL")}/complete-signup?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${Deno.env.get("APP_URL")}/auth?canceled=true`,
-      // Optional: Add customer creation settings
-      customer_creation: 'always',
       // Optional: Customize the checkout experience
       allow_promotion_codes: true,
       billing_address_collection: 'required',

@@ -1,4 +1,3 @@
-// supabase/functions/verify-checkout-session/index.ts
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import Stripe from 'https://esm.sh/stripe@15.8.0?target=deno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -36,7 +35,7 @@ serve(async (req) => {
 
     // 1. Verify the Stripe session
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ['customer', 'subscription'],
+      expand: ['customer', 'subscription', 'subscription.items'],
     });
     
     if (session.payment_status !== 'paid') {
@@ -49,12 +48,19 @@ serve(async (req) => {
       throw new Error('No user data found in session');
     }
 
+    console.log('Processing signup for:', userData.email);
+    console.log('Session payment status:', session.payment_status);
+    console.log('User data:', userData);
+
     const stripeCustomerId = session.customer?.id;
     const stripeSubscriptionId = session.subscription?.id;
+    const stripePriceId = session.subscription?.items?.data?.[0]?.price?.id;
 
     if (!stripeCustomerId || !stripeSubscriptionId) {
       throw new Error('Stripe customer or subscription ID not found');
     }
+
+    console.log('Stripe IDs:', { stripeCustomerId, stripeSubscriptionId, stripePriceId });
 
     // 3. Create the user account in Supabase (server-side with admin privileges)
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
@@ -103,15 +109,37 @@ serve(async (req) => {
       // Don't throw - profile creation can be retried later
     }
 
-    // 5. Create subscription record
+    // 5. Find the matching subscription plan
+    const { data: planData, error: planError } = await supabase
+      .from('subscription_plans')
+      .select('id')
+      .eq('stripe_price_id', stripePriceId)
+      .eq('active', true)
+      .single();
+
+    if (planError && planError.code !== 'PGRST116') {
+      console.error('Error finding subscription plan:', planError);
+    }
+
+    // 6. Create subscription record
+    const subscriptionData: any = {
+      user_id: authData.user.id,
+      stripe_customer_id: stripeCustomerId,
+      stripe_subscription_id: stripeSubscriptionId,
+      price_id: stripePriceId,
+      status: 'active',
+      current_period_start: new Date(session.subscription.current_period_start * 1000).toISOString(),
+      current_period_end: new Date(session.subscription.current_period_end * 1000).toISOString(),
+    };
+
+    // Add plan_id if we found a matching plan
+    if (planData?.id) {
+      subscriptionData.plan_id = planData.id;
+    }
+
     const { error: subscriptionError } = await supabase
       .from('subscriptions')
-      .upsert({
-        user_id: authData.user.id,
-        stripe_customer_id: stripeCustomerId,
-        stripe_subscription_id: stripeSubscriptionId,
-        status: 'active',
-      }, { onConflict: 'stripe_subscription_id' });
+      .upsert(subscriptionData, { onConflict: 'stripe_subscription_id' });
 
     if (subscriptionError && subscriptionError.code !== '23505') {
       console.error('Subscription creation error:', subscriptionError);

@@ -13,71 +13,72 @@ export function CompleteSignup() {
   const { isAuthenticated } = useAuth();
 
   useEffect(() => {
+    // If already authenticated, redirect immediately
     if (isAuthenticated) {
       navigate('/dashboard', { replace: true });
       return;
     }
+
+    // Prevent double execution
     if (hasRun.current) return;
     hasRun.current = true;
 
     const completeSignupProcess = async () => {
       try {
         const sessionId = searchParams.get('session_id');
-        if (!sessionId) throw new Error('Session ID is missing from the URL.');
+        if (!sessionId) {
+          throw new Error('Missing session ID. Please try signing up again.');
+        }
 
-        const sessionResponse = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-checkout-session`, {
+        // Verify checkout session and create user account
+        const response = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/verify-checkout-session`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          },
           body: JSON.stringify({ sessionId }),
         });
 
-        if (!sessionResponse.ok) {
-          const errorResult = await sessionResponse.json();
-          throw new Error(errorResult.error || 'Failed to verify checkout session.');
+        if (!response.ok) {
+          const errorResult = await response.json();
+          throw new Error(errorResult.error || 'Failed to verify payment');
         }
         
-        const { userData, stripeCustomerId, stripeSubscriptionId } = await sessionResponse.json();
-        if (!userData || !userData.email || !userData.password) throw new Error('Required signup data is missing.');
-        if (!stripeCustomerId || !stripeSubscriptionId) throw new Error('Stripe IDs were not returned.');
-
-        const { email, fullName, companyName, phone = '', password, timezone } = userData;
-        const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-
-        let userId = signInData?.user?.id;
-
-        if (signInError?.message === 'Invalid login credentials') {
-          const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-            email, password, options: { data: { full_name: fullName, company_name: companyName, phone, timezone } }
-          });
-          if (signUpError) throw signUpError;
-          if (!signUpData.user) throw new Error('Failed to create user account.');
-          userId = signUpData.user.id;
-        } else if (signInError) {
-          throw signInError;
+        const responseData = await response.json();
+        console.log('Server response:', responseData);
+        
+        const { success, accessToken, refreshToken, userId } = responseData;
+        
+        if (!success || !accessToken || !refreshToken) {
+          throw new Error('Invalid response from server');
         }
 
-        if (!userId) throw new Error('Could not determine user ID.');
-
-        const { error: subscriptionError } = await supabase.from('subscriptions').insert({
-          user_id: userId,
-          stripe_customer_id: stripeCustomerId,
-          stripe_subscription_id: stripeSubscriptionId,
-          status: 'active',
+        // Set the session in Supabase client
+        const { data: authData, error: authError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken,
         });
-        if (subscriptionError && subscriptionError.code !== '23505') {
-            throw subscriptionError;
-        }
-        
-        const { error: profileError } = await supabase.from('profiles').upsert({
-          id: userId, full_name: fullName, company_name: companyName, phone, timezone
-        }, { onConflict: 'id' });
-        if (profileError) throw profileError;
 
+        if (authError) {
+          throw new Error(`Authentication failed: ${authError.message}`);
+        }
+
+        if (!authData.user) {
+          throw new Error('No user data received');
+        }
+
+        console.log(`User ${userId} successfully signed up and authenticated`);
         setStatus('success');
-        setTimeout(() => navigate('/dashboard', { replace: true }), 1500);
+        
+        // Redirect to dashboard after brief success message
+        setTimeout(() => {
+          navigate('/dashboard', { replace: true });
+        }, 1500);
 
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'An unknown error occurred during signup.');
+        console.error('Signup completion error:', err);
+        setError(err instanceof Error ? err.message : 'An unexpected error occurred');
         setStatus('error');
       }
     };
@@ -85,15 +86,24 @@ export function CompleteSignup() {
     completeSignupProcess();
   }, [searchParams, navigate, isAuthenticated]);
 
-  // --- (Your JSX for loading, error, and success states remains the same) ---
   if (status === 'loading') {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary/10 via-white to-primary/5 flex items-center justify-center px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-10 text-center">
-          <div className="flex justify-center mb-6"><div className="bg-primary text-white rounded-full h-16 w-16 flex items-center justify-center text-2xl font-bold shadow-md">RMP</div></div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">Welcome to <span className="text-primary">Rate Monitor Pro</span></h2>
-          <p className="text-gray-600 mb-6">Finalizing your account details. This should only take a moment.</p>
-          <div className="flex justify-center"><div className="h-12 w-12 rounded-full border-4 border-primary/30 border-t-primary animate-spin"></div></div>
+          <div className="flex justify-center mb-6">
+            <div className="bg-primary text-white rounded-full h-16 w-16 flex items-center justify-center text-2xl font-bold shadow-md">
+              RMP
+            </div>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            Welcome to <span className="text-primary">Rate Monitor Pro</span>
+          </h2>
+          <p className="text-gray-600 mb-6">
+            Completing your registration and setting up your account...
+          </p>
+          <div className="flex justify-center">
+            <div className="h-12 w-12 rounded-full border-4 border-primary/30 border-t-primary animate-spin"></div>
+          </div>
         </div>
       </div>
     );
@@ -103,10 +113,23 @@ export function CompleteSignup() {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center px-4">
         <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
-          <h2 className="mt-4 text-xl font-semibold text-gray-900">Registration Error</h2>
-          <p className="mt-2 text-red-600">{error}</p>
-          <button onClick={() => navigate('/auth')} className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-primary-dark">Return to Sign Up</button>
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Registration Error</h2>
+          <p className="text-red-600 mb-6">{error}</p>
+          <div className="space-y-3">
+            <button 
+              onClick={() => window.location.reload()} 
+              className="w-full px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-dark transition-colors"
+            >
+              Try Again
+            </button>
+            <button 
+              onClick={() => navigate('/auth')} 
+              className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+            >
+              Back to Sign Up
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -116,11 +139,19 @@ export function CompleteSignup() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-primary/10 via-white to-primary/5 flex items-center justify-center px-4">
         <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-10 text-center">
-          <div className="flex justify-center mb-6"><div className="bg-primary text-white rounded-full h-16 w-16 flex items-center justify-center text-2xl font-bold shadow-md">RMP</div></div>
+          <div className="flex justify-center mb-6">
+            <div className="bg-primary text-white rounded-full h-16 w-16 flex items-center justify-center text-2xl font-bold shadow-md">
+              RMP
+            </div>
+          </div>
           <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-3">Welcome Aboard!</h2>
-          <p className="text-gray-600 mb-6">Your account is ready. Redirecting you to the dashboard...</p>
-          <div className="flex justify-center"><div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div></div>
+          <p className="text-gray-600 mb-6">
+            Your account is ready and your subscription is active. Redirecting to your dashboard...
+          </p>
+          <div className="flex justify-center">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+          </div>
         </div>
       </div>
     );
